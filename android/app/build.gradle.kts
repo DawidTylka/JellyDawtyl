@@ -32,7 +32,8 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+        // Poprawka: Standardowy format zapisu jvmTarget dla Kotlin DSL
+        jvmTarget = "17"
     }
 
     // KONFIGURACJA PODPISYWANIA
@@ -58,11 +59,13 @@ android {
 
     buildTypes {
         release {
-            // ZMIANA: Teraz używamy prawdziwego klucza, a nie debug!
+            // Ustawienie podpisu release
             signingConfig = signingConfigs.getByName("release")
             
-            isMinifyEnabled = false // możesz zmienić na true dla optymalizacji
-            shrinkResources = false
+            isMinifyEnabled = false 
+            // Poprawka: W Kotlin DSL używamy 'isShrinkResources' zamiast 'shrinkResources'
+            isShrinkResources = false 
+            
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
