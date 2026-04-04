@@ -26,6 +26,30 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
     _bufferSub = _player!.stream.buffer.listen((buffer) {
       _broadcastState(bufferedPosition: buffer);
     });
+
+    player.stream.position.listen((pos) {
+      playbackState.add(playbackState.value.copyWith(updatePosition: pos));
+
+      player.stream.duration.listen((dur) {
+        if (dur.inSeconds > 0) {
+          mediaItem.add(mediaItem.value?.copyWith(duration: dur));
+        }
+      });
+
+      player.stream.playing.listen((playing) {
+        playbackState.add(
+          playbackState.value.copyWith(
+            playing: playing,
+            controls: [
+              MediaControl.rewind,
+              playing ? MediaControl.pause : MediaControl.play,
+              MediaControl.fastForward,
+            ],
+            systemActions: {MediaAction.seek},
+          ),
+        );
+      });
+    });
   }
 
   void detachPlayer() {
@@ -73,6 +97,24 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> seek(Duration position) async => _player?.seek(position);
+  // Obsługa przewijania z poziomu powiadomienia (popupu)
+
+  @override
+  Future<void> fastForward() async {
+    // Sprawdzamy czy _player nie jest nullem ZANIM go użyjemy
+    final player = _player;
+    if (player != null) {
+      await player.seek(player.state.position + const Duration(seconds: 10));
+    }
+  }
+
+  @override
+  Future<void> rewind() async {
+    final player = _player;
+    if (player != null) {
+      await player.seek(player.state.position - const Duration(seconds: 10));
+    }
+  }
 
   @override
   Future<void> stop() async {

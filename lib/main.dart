@@ -187,24 +187,6 @@ class _JellyfinAppState extends State<JellyfinApp> {
     const accent = Color(0xFF8B5CF6);
     const secondary = Color(0xFF22D3EE);
 
-    Widget currentScreen;
-
-    if (_isLoadingPref) {
-      currentScreen = const Scaffold(
-        backgroundColor: background,
-        body: Center(child: CircularProgressIndicator(color: accent)),
-      );
-    } else if (_showAdPrompt) {
-      currentScreen = _buildAdPromptScreen(
-        context,
-        background,
-        surface,
-        accent,
-      );
-    } else {
-      currentScreen = widget.startScreen;
-    }
-
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Jellyfin Client',
@@ -282,7 +264,28 @@ class _JellyfinAppState extends State<JellyfinApp> {
           ),
         ),
       ),
-      home: currentScreen,
+      home: Builder(
+      builder: (innerContext) {
+        // Teraz używamy innerContext, który jest JUŻ WEWNĄTRZ MaterialApp
+        // i ma dostęp do lokalizacji!
+
+        if (_isLoadingPref) {
+          return const Scaffold(
+            backgroundColor: background,
+            body: Center(child: CircularProgressIndicator(color: accent)),
+          );
+        } else if (_showAdPrompt) {
+          return _buildAdPromptScreen(
+            innerContext, // Przekazujemy POPRAWNY kontekst
+            background,
+            surface,
+            accent,
+          );
+        } else {
+          return widget.startScreen;
+        }
+      },
+    ),
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
