@@ -10,7 +10,7 @@ if (envFile.exists()) {
 
 // --- Wczytywanie pliku key.properties (do podpisania apki) ---
 val keystoreProperties = Properties()
-val keystorePropertiesFile = rootProject.file("key.properties")
+val keystorePropertiesFile = project.file("key.properties") 
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
@@ -32,17 +32,23 @@ android {
     }
 
     kotlinOptions {
-        // Poprawka: Standardowy format zapisu jvmTarget dla Kotlin DSL
         jvmTarget = "17"
     }
 
     // KONFIGURACJA PODPISYWANIA
     signingConfigs {
         create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String?
-            keyPassword = keystoreProperties["keyPassword"] as String?
-            storeFile = keystoreProperties["storeFile"]?.let { file(it) }
-            storePassword = keystoreProperties["storePassword"] as String?
+            val alias = keystoreProperties["keyAlias"] as String?
+            val password = keystoreProperties["keyPassword"] as String?
+            val storeFilePath = keystoreProperties["storeFile"] as String?
+            val storePassword = keystoreProperties["storePassword"] as String?
+
+            if (alias != null && password != null && storeFilePath != null && storePassword != null) {
+                keyAlias = alias
+                keyPassword = password
+                storeFile = file(storeFilePath)
+                this.storePassword = storePassword
+            }
         }
     }
 
@@ -63,7 +69,6 @@ android {
             signingConfig = signingConfigs.getByName("release")
             
             isMinifyEnabled = false 
-            // Poprawka: W Kotlin DSL używamy 'isShrinkResources' zamiast 'shrinkResources'
             isShrinkResources = false 
             
             proguardFiles(
