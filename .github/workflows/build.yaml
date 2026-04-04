@@ -1,0 +1,108 @@
+name: Flutter Auto-Build
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # ---------------------------------------------------
+  # 1. BUDOWANIE DLA ANDROIDA I LINUXA
+  # ---------------------------------------------------
+  build-android-linux:
+    name: Build Android & Linux
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Pobieranie kodu
+        uses: actions/checkout@v3
+
+      - name: Instalacja Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Konfiguracja Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Instalacja zależności Linux
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev jq libsecret-1-dev libjsoncpp-dev libasound2-dev libmpv-dev lld
+
+      - name: Konfiguracja Fluttera
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      # Przygotowanie plików z Twoich GitHub Secrets
+      - name: Odtwórz plik .env
+        run: echo "${{ secrets.ENV_FILE }}" > .env
+
+      - name: Odtwórz Keystore i właściwości
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
+          echo "${{ secrets.KEY_PROPERTIES }}" > android/key.properties
+
+      - name: Pobieranie paczek (pub get)
+        run: flutter pub get
+
+      # Budowanie wszystkich wersji Androida
+      - name: Budowanie Android APK (do testów)
+        run: flutter build apk --release
+
+      - name: Budowanie Android App Bundle (do Sklepu Play)
+        run: flutter build appbundle --release
+
+      # Budowanie wersji na Linuxa
+      - name: Budowanie Linux App
+        run: flutter build linux --release
+
+      # --- UDOSTĘPNIANIE ARTEFAKTÓW (Pliki do pobrania) ---
+      
+      - name: Zapamiętaj plik APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: Android-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Zapamiętaj plik App Bundle (.aab)
+        uses: actions/upload-artifact@v3
+        with:
+          name: Android-AppBundle
+          path: build/app/outputs/bundle/release/app-release.aab
+
+      - name: Zapamiętaj paczkę Linux
+        uses: actions/upload-artifact@v3
+        with:
+          name: Linux-App
+          path: build/linux/x64/release/bundle/
+
+  # ---------------------------------------------------
+  # 2. BUDOWANIE DLA WINDOWSA (na maszynie Windows)
+  # ---------------------------------------------------
+  # build-windows:
+  #   name: Build Windows
+  #   runs-on: windows-latest # Wymaga runnera z Windowsem
+
+  #   steps:
+  #     - name: Pobieranie kodu
+  #       uses: actions/checkout@v3
+
+  #     - name: Konfiguracja Fluttera
+  #       uses: subosito/flutter-action@v2
+  #       with:
+  #         channel: 'stable'
+
+  #     - name: Pobieranie paczek (pub get)
+  #       run: flutter pub get
+
+  #     - name: Budowanie Windows App (.exe)
+  #       run: flutter build windows --release
+
+  #     - name: Udostępnij paczkę Windows
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: Windows-App
+  #         path: build\windows\runner\Release\
