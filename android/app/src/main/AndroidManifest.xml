@@ -27,7 +27,7 @@
             </intent-filter>
         </receiver>
         <activity
-            android:name="com.example.flutter_application_1.MainActivity"
+            android:name="com.dawtyl.jellydawtyl.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""

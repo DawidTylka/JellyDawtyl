@@ -25,7 +25,7 @@ void main() async {
   audioHandler = await AudioService.init(
     builder: () => MyAudioHandler(),
     config: const AudioServiceConfig(
-      androidNotificationChannelId: 'com.example.flutter_application_1.audio',
+      androidNotificationChannelId: 'com.dawtyl.jellydawtyl.audio',
       androidNotificationChannelName: 'Odtwarzanie w tle',
       androidNotificationOngoing: true,
       androidShowNotificationBadge: true,
