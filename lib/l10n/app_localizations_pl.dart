@@ -185,4 +185,10 @@ class AppLocalizationsPl extends AppLocalizations {
 
   @override
   String get loadingPrivacyOptions => 'Ładowanie opcji prywatności...';
+
+  @override
+  String get toWatch => 'Do obejrzenia';
+
+  @override
+  String get lasttlyAdded => 'Ostatnio dodane';
 }

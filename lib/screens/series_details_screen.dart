@@ -448,7 +448,7 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
                                     vertical: 5,
                                   ),
                                   child: LinearProgressIndicator(
-                                    value: activeDl.progressValue == -1
+                                    value: activeDl.progressValue < 0
                                         ? null
                                         : activeDl.progressValue,
                                     color: Colors.greenAccent,

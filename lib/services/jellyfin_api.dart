@@ -44,15 +44,13 @@ class JellyfinApi {
         options: Options(headers: {"X-Emby-Token": token}),
       );
       final List data = response.data['Items'] ?? [];
-      return data
-          .where(
-            (item) =>
-                item['CollectionType'] != 'music' &&
-                item['CollectionType'] != 'audiobooks' &&
-                item['CollectionType'] != 'books',
-          )
-          .map((l) => Library.fromJson(l))
-          .toList();
+      return data.where((item) {
+        final type = item['CollectionType'];
+        
+        const allowedTypes = ['movies', 'tvshows', 'boxsets', 'homevideos', 'folders'];
+        
+        return allowedTypes.contains(type) || type == null;
+      }).map((l) => Library.fromJson(l)).toList();
     } catch (e) {
       print("Błąd bibliotek: $e");
       return [];
@@ -265,6 +263,31 @@ class JellyfinApi {
     } catch (e) {
       print("Błąd pobierania mediów: $e");
       return null;
+    }
+  }
+
+  // E. Pobiera "Następne w kolejce" (tylko dla seriali)
+  Future<List<Movie>> fetchNextUp(
+    String url,
+    String token,
+    String userId,
+  ) async {
+    String fullUrl = url.startsWith('http') ? url : 'https://$url';
+    try {
+      final response = await _dio.get(
+        "$fullUrl/Shows/NextUp",
+        queryParameters: {
+          "UserId": userId,
+          "Fields": "PrimaryImageAspectRatio,Overview,Type",
+        },
+        options: Options(headers: {"X-Emby-Token": token}),
+      );
+
+      final List data = response.data['Items'] ?? [];
+      return data.map((m) => Movie.fromJson(m)).toList();
+    } catch (e) {
+      print("Błąd NextUp: $e");
+      return [];
     }
   }
 }

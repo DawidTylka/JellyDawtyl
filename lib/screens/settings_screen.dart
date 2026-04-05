@@ -23,6 +23,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _downloadWifiOnly = true;
   bool _useNativeDownloader = false;
   bool _showAds = false;
+  int _maxConcurrentValue = 3;
 
   String? _customDownloadPath;
 
@@ -46,6 +47,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       defaultValue: false,
     );
 
+    final maxConcurrent = await _storage.getInt(
+      'setting_max_concurrent_downloads',
+      defaultValue: 3,
+    );
+
     final customPath = await _storage.getString('setting_download_path');
     final adsChoice = await _storage.getString('setting_ads_choice');
 
@@ -53,6 +59,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _autoPlayNext = autoPlay;
       _downloadWifiOnly = wifiOnly;
       _useNativeDownloader = nativeDownloader;
+      _maxConcurrentValue = maxConcurrent;
       _customDownloadPath = customPath;
       _showAds = (adsChoice == 'yes');
       _isLoading = false;
@@ -113,19 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           : ListView(
               padding: const EdgeInsets.symmetric(vertical: 16),
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Text(
-                    l10n.playback,
-                    style: const TextStyle(
-                      color: Colors.deepPurpleAccent,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
+                _buildSectionTitle(l10n.playback),
                 SwitchListTile(
                   title: Text(l10n.autoPlay),
                   subtitle: Text(l10n.autoPlaySub),
@@ -140,19 +135,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const Divider(height: 32, color: Colors.white24),
 
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Text(
-                    l10n.downloading,
-                    style: const TextStyle(
-                      color: Colors.deepPurpleAccent,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
+                _buildSectionTitle(l10n.downloading),
 
                 ListTile(
                   title: Text(l10n.downloadFolder),
@@ -185,6 +168,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: _pickDirectory,
                 ),
 
+                ListTile(
+                  title: const Text("Jednoczesne pobierania"),
+                  subtitle: const Text("Ile plików pobierać naraz"),
+                  trailing: DropdownButton<int>(
+                    value: _maxConcurrentValue,
+                    dropdownColor: const Color(0xFF1C1C1E),
+                    underline: const SizedBox(),
+                    items: [1, 2, 3, 4, 5]
+                        .map(
+                          (e) => DropdownMenuItem(
+                            value: e,
+                            child: Text(
+                              e.toString(),
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (val) async {
+                      if (val != null) {
+                        await _storage.saveInt(
+                          'setting_max_concurrent_downloads',
+                          val,
+                        );
+                        setState(() => _maxConcurrentValue = val);
+                      }
+                    },
+                  ),
+                ),
+
                 SwitchListTile(
                   title: Text(l10n.downloadWifiOnly),
                   subtitle: Text(l10n.downloadWifiOnlySub),
@@ -196,6 +209,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     (v) => _downloadWifiOnly = v,
                   ),
                 ),
+
                 SwitchListTile(
                   title: Text(l10n.useNativeDownloader),
                   subtitle: Text(l10n.useNativeDownloaderSub),
@@ -209,21 +223,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
 
                 const Divider(height: 32, color: Colors.white24),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Text(
-                    l10n.privacy,
-                    style: const TextStyle(
-                      color: Colors.deepPurpleAccent,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
 
-                // --- OPCJA: Wsparcie Twórcy (Reklamy) ---
+                _buildSectionTitle(l10n.privacy),
                 SwitchListTile(
                   title: Text(l10n.supportCreatorAdsTitle),
                   subtitle: Text(l10n.supportCreatorAdsSubtitle),
@@ -240,66 +241,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     color: Colors.deepPurpleAccent,
                   ),
                   enabled: _showAds,
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(l10n.loadingPrivacyOptions)),
-                    );
-
-                    ConsentInformation.instance.reset();
-
-                    final String? testDeviceId =
-                        dotenv.env['ADMOB_TEST_DEVICE_ID'];
-
-                    ConsentRequestParameters params = ConsentRequestParameters(
-                      consentDebugSettings: ConsentDebugSettings(
-                        debugGeography: DebugGeography.debugGeographyEea,
-                        testIdentifiers:
-                            testDeviceId != null && testDeviceId.isNotEmpty
-                            ? [testDeviceId]
-                            : [],
-                      ),
-                    );
-
-                    ConsentInformation.instance.requestConsentInfoUpdate(
-                      params,
-                      () async {
-                        if (await ConsentInformation.instance
-                            .isConsentFormAvailable()) {
-                          ConsentForm.loadConsentForm(
-                            (ConsentForm consentForm) {
-                              ScaffoldMessenger.of(
-                                context,
-                              ).hideCurrentSnackBar();
-
-                              consentForm.show((FormError? formError) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      "Ustawienia prywatności zostały zaktualizowane.",
-                                    ),
-                                  ),
-                                );
-                              });
-                            },
-                            (FormError formError) {
-                              debugPrint(
-                                "Błąd ładowania formularza UMP: ${formError.message}",
-                              );
-                            },
-                          );
-                        }
-                      },
-                      (FormError error) {
-                        debugPrint(
-                          "Błąd sprawdzania statusu UMP: ${error.message}",
-                        );
-                      },
-                    );
-                  },
+                  onTap: _showPrivacyManager,
                 ),
               ],
             ),
       bottomNavigationBar: const AdBannerWidget(),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Text(
+        title,
+        style: const TextStyle(
+          color: Colors.deepPurpleAccent,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  void _showPrivacyManager() {
+    final l10n = AppLocalizations.of(context)!;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.loadingPrivacyOptions)));
+
+    ConsentInformation.instance.reset();
+
+    final String? testDeviceId = dotenv.env['ADMOB_TEST_DEVICE_ID'];
+
+    ConsentRequestParameters params = ConsentRequestParameters(
+      consentDebugSettings: ConsentDebugSettings(
+        debugGeography: DebugGeography.debugGeographyEea,
+        testIdentifiers: testDeviceId != null && testDeviceId.isNotEmpty
+            ? [testDeviceId]
+            : [],
+      ),
+    );
+
+    ConsentInformation.instance.requestConsentInfoUpdate(
+      params,
+      () async {
+        if (await ConsentInformation.instance.isConsentFormAvailable()) {
+          ConsentForm.loadConsentForm(
+            (ConsentForm consentForm) {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              consentForm.show((FormError? formError) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      "Ustawienia prywatności zostały zaktualizowane.",
+                    ),
+                  ),
+                );
+              });
+            },
+            (FormError formError) {
+              debugPrint("Błąd ładowania formularza UMP: ${formError.message}");
+            },
+          );
+        }
+      },
+      (FormError error) {
+        debugPrint("Błąd sprawdzania statusu UMP: ${error.message}");
+      },
     );
   }
 }

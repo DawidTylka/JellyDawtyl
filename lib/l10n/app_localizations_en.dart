@@ -185,4 +185,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get loadingPrivacyOptions => 'Loading privacy options...';
+
+  @override
+  String get toWatch => 'To Watch';
+
+  @override
+  String get lasttlyAdded => 'Lastly Added';
 }

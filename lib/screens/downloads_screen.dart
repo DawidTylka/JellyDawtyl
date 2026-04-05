@@ -385,7 +385,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
         final file = _items[index] as File;
         final fileName = file.path.split(Platform.pathSeparator).last;
         final isSelected = _selectedIndices.contains(index);
-        final size = (file.lengthSync() / (1024 * 1024)).toStringAsFixed(1);
+        final bool exists = file.existsSync();
+        final size = exists 
+            ? (file.lengthSync() / (1024 * 1024)).toStringAsFixed(1)
+            : "0.0";
+            
         final thumbnailPath =
             '${file.path.substring(0, file.path.length - 4)}.jpg';
         final thumbnailFile = File(thumbnailPath);

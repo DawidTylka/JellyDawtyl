@@ -55,5 +55,7 @@
   "supportCreatorAdsTitle": "Wsparcie Twórcy (Reklamy)",
   "supportCreatorAdsSubtitle": "Wyświetlaj małe, nieprzeszkadzające reklamy, aby wesprzeć projekt.",
   "managePrivacySubtitle": "Zmień zgodę na wyświetlanie spersonalizowanych reklam",
-  "loadingPrivacyOptions": "Ładowanie opcji prywatności..."
+  "loadingPrivacyOptions": "Ładowanie opcji prywatności...",
+  "toWatch": "Do obejrzenia",
+  "lasttlyAdded":"Ostatnio dodane"
 }

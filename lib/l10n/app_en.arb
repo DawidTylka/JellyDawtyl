@@ -55,5 +55,7 @@
   "supportCreatorAdsTitle": "Creator Support (Ads)",
   "supportCreatorAdsSubtitle": "Display small, non-intrusive ads to support the project.",
   "managePrivacySubtitle": "Change consent for displaying personalized ads",
-  "loadingPrivacyOptions": "Loading privacy options..."
+  "loadingPrivacyOptions": "Loading privacy options...",
+  "toWatch": "To Watch",
+  "lasttlyAdded": "Lastly Added"
 }

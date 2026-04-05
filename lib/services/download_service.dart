@@ -12,16 +12,21 @@ import 'downloaders/base_downloader.dart';
 import 'downloaders/dio_downloader.dart';
 import 'downloaders/native_downloader.dart';
 
+import 'dart:math';
+import 'dart:async';
+
 class DownloadStatus {
   final double progressValue;
   final String progressText;
   final bool isDownloaded;
+  final bool isQueued;
   final String? filePath;
 
   DownloadStatus({
     this.progressValue = 0.0,
     this.progressText = "",
     this.isDownloaded = false,
+    this.isQueued = false,
     this.filePath,
   });
 }
@@ -31,6 +36,10 @@ class DownloadService {
   factory DownloadService() => _instance;
   DownloadService._internal();
 
+  static final List<Future<void> Function()> _queue = [];
+  static int _activeCount = 0;
+  static bool _isProcessing = false;
+  static Timer? _debounceTimer;
   final StorageService _storage = StorageService();
   final ValueNotifier<Map<String, DownloadStatus>> activeDownloads =
       ValueNotifier({});
@@ -45,6 +54,33 @@ class DownloadService {
       return NativeDownloader();
     } else {
       return DioDownloader();
+    }
+  }
+
+  void _processQueue() async {
+    if (_isProcessing) return;
+    _isProcessing = true;
+
+    try {
+      const int maxConcurrent = 1;
+
+      while (_queue.isNotEmpty && _activeCount < maxConcurrent) {
+        final Future<void> Function() task = _queue.removeAt(0);
+
+        _activeCount++;
+
+        debugPrint("Startuję zadanie. Aktywne: $_activeCount / $maxConcurrent");
+
+        task().whenComplete(() {
+          _activeCount--;
+          debugPrint("Zakończono zadanie. Pozostało aktywnych: $_activeCount");
+          _processQueue();
+        });
+      }
+    } catch (e) {
+      debugPrint("Błąd kolejki: $e");
+    } finally {
+      _isProcessing = false;
     }
   }
 
@@ -107,70 +143,86 @@ class DownloadService {
     final String itemId = item.id;
     if (activeDownloads.value.containsKey(itemId)) return;
 
-    String? finalSeriesName = seriesOverrideName;
-    if (item.type == "Episode" && finalSeriesName == null) {
-      finalSeriesName = item.seriesName;
-      if (finalSeriesName == null && item.seriesId != null) {
-        _updateProgress(itemId, progressValue: 0.0, progressText: "Dane...");
-        finalSeriesName = await JellyfinApi().fetchSeriesName(
-          baseUrl,
-          token,
-          item.seriesId!,
-        );
+    _updateProgress(
+      itemId,
+      progressValue: 0.0,
+      progressText: "Oczekiwanie...",
+      isQueued: true,
+    );
+    Future<void> downloadTask() async {
+      String? finalSeriesName = seriesOverrideName;
+      if (item.type == "Episode" && finalSeriesName == null) {
+        finalSeriesName = item.seriesName;
+        if (finalSeriesName == null && item.seriesId != null) {
+          _updateProgress(itemId, progressValue: 0.0, progressText: "Dane...");
+          finalSeriesName = await JellyfinApi().fetchSeriesName(
+            baseUrl,
+            token,
+            item.seriesId!,
+          );
+        }
       }
+
+      final String baseDir = await getDirectoryPath();
+      if (baseDir.isEmpty) return;
+
+      final paths = _generatePaths(item, finalSeriesName, qualityLabel);
+      final String safeFolderName = paths["folder"]!;
+      final String fileName = paths["file"]!;
+
+      Directory seriesDir = Directory('$baseDir/$safeFolderName');
+      if (!seriesDir.existsSync()) seriesDir.createSync(recursive: true);
+
+      await _downloadMetadataImages(item, baseUrl, token, seriesDir, fileName);
+
+      String downloadUrl = qualityLabel == "original"
+          ? "$baseUrl/Items/$itemId/Download?api_key=$token"
+          : "$baseUrl/Videos/$itemId/stream.mp4?api_key=$token&Static=false&VideoCodec=h264&AudioCodec=aac&VideoProfile=main&MaxFramerate=24&AudioBitrate=96000&MaxAudioChannels=2&TranscodingMaxType=Vaapi&CpuCoreLimit=2&EnableSubtitlesInManifest=false&PlaySessionId=${DateTime.now().millisecondsSinceEpoch}";
+
+      if (qualityLabel != "original" && maxWidth != null) {
+        downloadUrl += "&maxWidth=$maxWidth";
+        if (bitrate != null) downloadUrl += "&videoBitrate=$bitrate";
+        downloadUrl += "&VideoBitratePreroll=0&FillMethod=Preserve";
+      }
+
+      BaseDownloader downloader = await _getDownloaderInstance();
+
+      bool wifiOnly = await _storage.getSetting(
+        'setting_wifionly',
+        defaultValue: true,
+      );
+
+      await downloader.downloadVideo(
+        itemId: itemId,
+        downloadUrl: downloadUrl,
+        saveDir: seriesDir.path,
+        fileName: fileName,
+        token: token,
+        wifiOnly: wifiOnly,
+        onProgress: (id, val, text) =>
+            _updateProgress(id, progressValue: val, progressText: text),
+        onFinished: (id) => _finishDownload(id, "${seriesDir.path}/$fileName"),
+      );
     }
 
-    final String baseDir = await getDirectoryPath();
-    if (baseDir.isEmpty) return;
-
-    final paths = _generatePaths(item, finalSeriesName, qualityLabel);
-    final String safeFolderName = paths["folder"]!;
-    final String fileName = paths["file"]!;
-
-    Directory seriesDir = Directory('$baseDir/$safeFolderName');
-    if (!seriesDir.existsSync()) seriesDir.createSync(recursive: true);
-
-    await _downloadMetadataImages(item, baseUrl, token, seriesDir, fileName);
-
-    String downloadUrl = qualityLabel == "original"
-        ? "$baseUrl/Items/$itemId/Download?api_key=$token"
-        : "$baseUrl/Videos/$itemId/stream.mp4?api_key=$token&Static=false&VideoCodec=h264&AudioCodec=aac&VideoProfile=main&MaxFramerate=24&AudioBitrate=96000&MaxAudioChannels=2&TranscodingMaxType=Vaapi&CpuCoreLimit=2&EnableSubtitlesInManifest=false&PlaySessionId=${DateTime.now().millisecondsSinceEpoch}";
-
-    if (qualityLabel != "original" && maxWidth != null) {
-      downloadUrl += "&maxWidth=$maxWidth";
-      if (bitrate != null) downloadUrl += "&videoBitrate=$bitrate";
-      downloadUrl += "&VideoBitratePreroll=0&FillMethod=Preserve";
-    }
-
-    BaseDownloader downloader = await _getDownloaderInstance();
-
-    bool wifiOnly = await _storage.getSetting(
-      'setting_wifionly',
-      defaultValue: true,
-    );
-
-    await downloader.downloadVideo(
-      itemId: itemId,
-      downloadUrl: downloadUrl,
-      saveDir: seriesDir.path,
-      fileName: fileName,
-      token: token,
-      wifiOnly: wifiOnly,
-      onProgress: (id, val, text) =>
-          _updateProgress(id, progressValue: val, progressText: text),
-      onFinished: (id) => _finishDownload(id, "${seriesDir.path}/$fileName"),
-    );
+    _queue.add(downloadTask);
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 150), () {
+      _processQueue();
+    });
   }
 
   void _updateProgress(
     String id, {
     double progressValue = 0.0,
     String progressText = "",
+    bool isQueued = false,
   }) {
     var newMap = Map<String, DownloadStatus>.from(activeDownloads.value);
     newMap[id] = DownloadStatus(
       progressValue: progressValue,
       progressText: progressText,
+      isQueued: isQueued,
     );
     activeDownloads.value = newMap;
   }
@@ -195,7 +247,7 @@ class DownloadService {
   ) async {
     final dio = Dio();
     String coverUrl =
-        "$baseUrl/Items/${item.seriesId}/Images/Primary?fillWidth=400&quality=90";
+        "$baseUrl/Items/${item.seriesId ?? item.id}/Images/Primary?fillWidth=400&quality=90";
 
     File coverFile = File('${seriesDir.path}/folder.jpg');
     if (!coverFile.existsSync()) {

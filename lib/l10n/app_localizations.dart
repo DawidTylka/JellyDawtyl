@@ -433,6 +433,18 @@ abstract class AppLocalizations {
   /// In pl, this message translates to:
   /// **'Ładowanie opcji prywatności...'**
   String get loadingPrivacyOptions;
+
+  /// No description provided for @toWatch.
+  ///
+  /// In pl, this message translates to:
+  /// **'Do obejrzenia'**
+  String get toWatch;
+
+  /// No description provided for @lasttlyAdded.
+  ///
+  /// In pl, this message translates to:
+  /// **'Ostatnio dodane'**
+  String get lasttlyAdded;
 }
 
 class _AppLocalizationsDelegate

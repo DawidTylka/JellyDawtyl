@@ -35,6 +35,16 @@ class StorageService {
     if (value == null) return defaultValue;
     return value == 'true';
   }
+  
+  Future<int> getInt(String key, {int defaultValue = 0}) async {
+    final value = await _storage.read(key: key);
+    if (value == null) return defaultValue;
+    return int.tryParse(value) ?? defaultValue; 
+  }
+
+  Future<void> saveInt(String key, int value) async {
+    await _storage.write(key: key, value: value.toString());
+  }
 
   Future<void> saveString(String key, String value) async {
     await _storage.write(key: key, value: value);

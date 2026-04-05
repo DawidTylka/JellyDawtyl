@@ -11,6 +11,7 @@ import 'downloads_screen.dart';
 import 'series_details_screen.dart';
 import 'settings_screen.dart';
 import '../widgets/ad_banner_widget.dart';
+import '../widgets/jellyfin_section.dart';
 
 class LibrarySelectorScreen extends StatefulWidget {
   final List<Library> libraries;
@@ -32,12 +33,20 @@ class LibrarySelectorScreen extends StatefulWidget {
 
 class _LibrarySelectorScreenState extends State<LibrarySelectorScreen> {
   List<JellyfinItem> _resumeItems = [];
+  List<JellyfinItem> _nextUpItems = [];
   bool _isLoadingResume = true;
+  bool _isLoadingnextUpItems = true;
 
   @override
   void initState() {
     super.initState();
     _loadResumeItems();
+    _loadNextUpItems();
+  }
+
+  Future<void> _refreshSelectorData() async {
+    _loadResumeItems();
+    _loadNextUpItems();
   }
 
   Future<void> _loadResumeItems() async {
@@ -56,6 +65,25 @@ class _LibrarySelectorScreenState extends State<LibrarySelectorScreen> {
       }
     } catch (e) {
       if (mounted) setState(() => _isLoadingResume = false);
+    }
+  }
+  
+  Future<void> _loadNextUpItems() async {
+    final api = JellyfinApi();
+    try {
+      final nextToWatch = await api.fetchNextUp(
+        widget.baseUrl,
+        widget.token,
+        widget.userId,
+      );
+      if (mounted) {
+        setState(() {
+          _nextUpItems = nextToWatch;
+          _isLoadingnextUpItems = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingnextUpItems = false);
     }
   }
 
@@ -87,7 +115,10 @@ class _LibrarySelectorScreenState extends State<LibrarySelectorScreen> {
         widget.userId,
         lib.id,
       );
-
+      setState(() {
+        _resumeItems = resume;
+        _isLoadingResume = false;
+      });
       if (!context.mounted) return;
       Navigator.pop(context);
 
@@ -119,122 +150,41 @@ class _LibrarySelectorScreenState extends State<LibrarySelectorScreen> {
     return 2;
   }
 
-  double _getResumeCardWidth(double width) {
-    if (width >= 1400) return 280;
-    if (width >= 1000) return 240;
-    return 190;
-  }
-
   Widget _buildResumeSection(double screenWidth, AppLocalizations l10n) {
     final cleanUrl = widget.baseUrl.startsWith('http')
         ? widget.baseUrl
         : 'https://${widget.baseUrl}';
-    final cardWidth = _getResumeCardWidth(screenWidth);
-    final sectionPadding = screenWidth >= 1000 ? 24.0 : 15.0;
-    final sectionHeight = screenWidth >= 1000 ? 220.0 : 160.0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: EdgeInsets.only(
-            left: sectionPadding,
-            top: 20,
-            bottom: 10,
-            right: sectionPadding,
-          ),
-          child: Text(
-            l10n.continueWatching,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+        JellyfinSection(
+          title: l10n.continueWatching,
+          items: _resumeItems,
+          aspectRatio: 16 / 9,
+          baseUrl: cleanUrl,
+          token: widget.token,
+          userId: widget.userId,
+          onRefresh: _refreshSelectorData,
+          showShowAllButton: false,
+          useSeriesImages: true,
         ),
-        DesktopHorizontalListView(
-          height: sectionHeight,
-          thumbVisibility: screenWidth >= 1000,
-          padding: EdgeInsets.symmetric(horizontal: sectionPadding - 5),
-          itemCount: _resumeItems.length,
-          itemBuilder: (context, index) {
-            final movie = _resumeItems[index];
-            final imageUrl =
-                "$cleanUrl/Items/${movie.id}/Images/Primary?quality=80&fillWidth=400";
+        
+        const SizedBox(height: 20),
 
-            return MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-                onTap: () {
-                  if (movie.type == "Series") {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => SeriesDetailsScreen(
-                          series: movie,
-                          baseUrl: cleanUrl,
-                          token: widget.token,
-                          userId: widget.userId,
-                        ),
-                      ),
-                    );
-                  } else {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => DetailsScreen(
-                          item: movie,
-                          baseUrl: cleanUrl,
-                          token: widget.token,
-                          userId: widget.userId,
-                        ),
-                      ),
-                    );
-                  }
-                },
-                child: Container(
-                  width: cardWidth,
-                  margin: const EdgeInsets.symmetric(horizontal: 6),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: CachedNetworkImage(
-                            imageUrl: imageUrl,
-                            httpHeaders: {"X-Emby-Token": widget.token},
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) =>
-                                Container(color: Colors.grey[900]),
-                            errorWidget: (context, url, error) => Container(
-                              color: Colors.grey[800],
-                              child: const Icon(
-                                Icons.play_circle_outline,
-                                color: Colors.white30,
-                                size: 40,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        movie.name,
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: screenWidth >= 1000 ? 13 : 12,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
+        JellyfinSection(
+          title: l10n.toWatch,
+          items: _nextUpItems,
+          aspectRatio: 16 / 9,
+          baseUrl: cleanUrl,
+          token: widget.token,
+          userId: widget.userId,
+          onRefresh: _refreshSelectorData,
+          showShowAllButton: false,
+          useSeriesImages: true,
         ),
+        
+        const SizedBox(height: 20),
       ],
     );
   }

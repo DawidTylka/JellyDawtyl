@@ -38,6 +38,21 @@ class _DetailsScreenState extends State<DetailsScreen> {
     _loadFullDetails();
     _loadMediaInfo();
     _scanDiskForExistingFile();
+
+    DownloadService().activeDownloads.addListener(_onDownloadStatusChanged);
+  }
+
+  @override
+  void dispose() {
+    // Pamiętaj o usunięciu nasłuchiwania przy zamykaniu ekranu
+    DownloadService().activeDownloads.removeListener(_onDownloadStatusChanged);
+    super.dispose();
+  }
+
+  void _onDownloadStatusChanged() {
+    if (!DownloadService().activeDownloads.value.containsKey(widget.item.id)) {
+      _scanDiskForExistingFile();
+    }
   }
 
   Future<void> _loadFullDetails() async {
@@ -427,7 +442,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
         ),
         const SizedBox(height: 8),
         LinearProgressIndicator(
-          value: status.progressValue == -1 ? null : status.progressValue,
+          value: status.progressValue < 0 ? null : status.progressValue,
           color: Colors.greenAccent,
           backgroundColor: Colors.white10,
         ),
