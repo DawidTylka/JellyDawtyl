@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import '../models/movie.dart';
 import '../models/library.dart';
 import '../models/episode.dart';
+import 'package:flutter/foundation.dart';
 
 class JellyfinApi {
   final Dio _dio = Dio();
@@ -26,7 +27,7 @@ class JellyfinApi {
       );
       return response.data;
     } catch (e) {
-      print("Błąd logowania: $e");
+      debugPrint("Błąd logowania: $e");
       return null;
     }
   }
@@ -52,7 +53,7 @@ class JellyfinApi {
         return allowedTypes.contains(type) || type == null;
       }).map((l) => Library.fromJson(l)).toList();
     } catch (e) {
-      print("Błąd bibliotek: $e");
+      debugPrint("Błąd bibliotek: $e");
       return [];
     }
   }
@@ -76,7 +77,7 @@ class JellyfinApi {
       final List data = response.data['Items'] ?? [];
       return data.map((m) => Movie.fromJson(m)).toList();
     } catch (e) {
-      print("Błąd Resume: $e");
+      debugPrint("Błąd Resume: $e");
       return [];
     }
   }
@@ -101,7 +102,7 @@ class JellyfinApi {
       final List data = response.data ?? [];
       return data.map((m) => Movie.fromJson(m)).toList();
     } catch (e) {
-      print("Błąd Latest: $e");
+      debugPrint("Błąd Latest: $e");
       return [];
     }
   }
@@ -131,7 +132,7 @@ class JellyfinApi {
       final List data = response.data['Items'] ?? [];
       return data.map((m) => Movie.fromJson(m)).toList();
     } catch (e) {
-      print("Błąd AllInLibrary: $e");
+      debugPrint("Błąd AllInLibrary: $e");
       return [];
     }
   }
@@ -155,7 +156,7 @@ class JellyfinApi {
       final List data = response.data['Items'] ?? [];
       return data.map((e) => Episode.fromJson(e)).toList();
     } catch (e) {
-      print("Błąd pobierania odcinków: $e");
+      debugPrint("Błąd pobierania odcinków: $e");
       return [];
     }
   }
@@ -184,7 +185,7 @@ class JellyfinApi {
         options: Options(headers: {"X-Emby-Token": token}),
       );
     } catch (e) {
-      print("Błąd raportowania postępu: $e");
+      debugPrint("Błąd raportowania postępu: $e");
     }
   }
 
@@ -258,10 +259,10 @@ class JellyfinApi {
         'Bitrate': bitrate,
         'raw': data,
       };
-      print('fetchItemMediaInfo: $itemId -> $meta');
+      debugPrint('fetchItemMediaInfo: $itemId -> $meta');
       return meta;
     } catch (e) {
-      print("Błąd pobierania mediów: $e");
+      debugPrint("Błąd pobierania mediów: $e");
       return null;
     }
   }
@@ -286,7 +287,7 @@ class JellyfinApi {
       final List data = response.data['Items'] ?? [];
       return data.map((m) => Movie.fromJson(m)).toList();
     } catch (e) {
-      print("Błąd NextUp: $e");
+      debugPrint("Błąd NextUp: $e");
       return [];
     }
   }

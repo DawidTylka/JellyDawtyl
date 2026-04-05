@@ -93,6 +93,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           ),
           TextButton(
             onPressed: () async {
+              final navigator = Navigator.of(context);
               List<int> sorted = _selectedIndices.toList()
                 ..sort((a, b) => b.compareTo(a));
 
@@ -108,7 +109,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               }
 
               if (mounted) {
-                Navigator.pop(context);
+                if (context.mounted) {navigator.pop();}
                 _loadData();
               }
             },
@@ -344,7 +345,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                           if (isSelected)
                             Container(
                               decoration: BoxDecoration(
-                                color: Colors.deepPurple.withOpacity(0.6),
+                                color: Colors.deepPurple.withValues(alpha: 0.6),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Center(
@@ -389,7 +390,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
         final size = exists 
             ? (file.lengthSync() / (1024 * 1024)).toStringAsFixed(1)
             : "0.0";
-            
+
         final thumbnailPath =
             '${file.path.substring(0, file.path.length - 4)}.jpg';
         final thumbnailFile = File(thumbnailPath);

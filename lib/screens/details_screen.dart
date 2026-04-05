@@ -29,7 +29,6 @@ class DetailsScreen extends StatefulWidget {
 class _DetailsScreenState extends State<DetailsScreen> {
   String? _localFilePath;
   String? _fullOverview;
-  bool _isLoadingDetails = true;
   Map<String, dynamic>? _mediaInfo;
 
   @override
@@ -68,12 +67,11 @@ class _DetailsScreenState extends State<DetailsScreen> {
           setState(() {
             _fullOverview =
                 response.data['Overview'] ?? response.data['SeriesOverview'];
-            _isLoadingDetails = false;
           });
         }
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoadingDetails = false);
+      debugPrint("Błąd ładowania szczegółów: $e");
     }
   }
 
@@ -304,23 +302,27 @@ class _DetailsScreenState extends State<DetailsScreen> {
                     subtitleIndex: sub['Index'],
                     languageName: lang,
                   );
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text("Pobrano: $title"),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text("Pobrano: $title"),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
                 } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Błąd zapisu napisów"),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Błąd zapisu napisów"),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
                 }
               },
             );
-          }).toList(),
+          }),
         ],
       ),
     );
@@ -418,7 +420,15 @@ class _DetailsScreenState extends State<DetailsScreen> {
     );
   }
 
-  Widget _qListTile(context, title, icon, color, w, b, label) {
+  Widget _qListTile(
+    BuildContext context,
+    String title,
+    IconData icon,
+    Color color,
+    int? w,
+    int? b,
+    String label,
+  ) {
     return ListTile(
       leading: Icon(icon, color: color),
       title: Text(title, style: const TextStyle(color: Colors.white)),

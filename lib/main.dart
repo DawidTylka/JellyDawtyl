@@ -314,7 +314,7 @@ class _JellyfinAppState extends State<JellyfinApp> {
             child: Card(
               color: surface,
               elevation: 8,
-              shadowColor: Colors.black.withOpacity(0.5),
+              shadowColor: Colors.black.withValues(alpha: 0.5),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
               ),
@@ -326,7 +326,7 @@ class _JellyfinAppState extends State<JellyfinApp> {
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: Colors.redAccent.withOpacity(0.15),
+                        color: Colors.redAccent.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -368,7 +368,7 @@ class _JellyfinAppState extends State<JellyfinApp> {
                         vertical: 12,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.04),
+                        color: Colors.white.withValues(alpha: 0.04),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Colors.white10),
                       ),
@@ -401,7 +401,7 @@ class _JellyfinAppState extends State<JellyfinApp> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: accent,
                         elevation: 6,
-                        shadowColor: accent.withOpacity(0.4),
+                        shadowColor: accent.withValues(alpha: 0.4),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),

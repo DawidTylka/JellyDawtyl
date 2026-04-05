@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
-import '../models/movie.dart';
 import '../models/episode.dart';
 import '../services/jellyfin_api.dart';
 import '../services/download_service.dart';
@@ -221,7 +220,16 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
         .toList();
   }
 
-  Widget _qTile(context, title, icon, color, w, b, label, onSelect) => ListTile(
+  Widget _qTile(
+    BuildContext context,
+    String title,
+    IconData icon,
+    Color color,
+    int? w,
+    int? b,
+    String label,
+    Function(int?, int?, String) onSelect,
+  ) => ListTile(
     leading: Icon(icon, color: color),
     title: Text(title, style: const TextStyle(color: Colors.white)),
     onTap: () {
@@ -460,7 +468,7 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
                           );
                         },
                       );
-                    }).toList(),
+                    }),
                   ],
                 );
               }).toList(),

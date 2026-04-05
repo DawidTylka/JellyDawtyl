@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -12,7 +11,6 @@ import 'downloaders/base_downloader.dart';
 import 'downloaders/dio_downloader.dart';
 import 'downloaders/native_downloader.dart';
 
-import 'dart:math';
 import 'dart:async';
 
 class DownloadStatus {
@@ -257,8 +255,9 @@ class DownloadService {
           coverFile.path,
           options: Options(headers: {"X-Emby-Token": token}),
         );
-        if (coverFile.existsSync() && coverFile.lengthSync() < 500)
+        if (coverFile.existsSync() && coverFile.lengthSync() < 500) {
           coverFile.deleteSync();
+        }
       } catch (_) {
         if (coverFile.existsSync()) coverFile.deleteSync();
       }
@@ -276,8 +275,9 @@ class DownloadService {
           thumbFile.path,
           options: Options(headers: {"X-Emby-Token": token}),
         );
-        if (thumbFile.existsSync() && thumbFile.lengthSync() < 500)
+        if (thumbFile.existsSync() && thumbFile.lengthSync() < 500) {
           thumbFile.deleteSync();
+        }
       } catch (_) {
         if (thumbFile.existsSync()) thumbFile.deleteSync();
       }
@@ -295,8 +295,9 @@ class DownloadService {
         item.id,
         "${paths["folder"]}/${paths["file"]}",
       );
-      if (status.isDownloaded && status.filePath != null)
+      if (status.isDownloaded && status.filePath != null) {
         return status.filePath;
+      }
     }
     return null;
   }
@@ -362,14 +363,14 @@ class DownloadService {
         int? bitrate = quality['bitrate'] as int?;
 
         if (width != null && height != null && hasSourceInfo) {
-          if (originalWidth! <= width || originalHeight! <= height) continue;
+          if (originalWidth <= width || originalHeight <= height) continue;
         }
 
         if (width != null &&
             height != null &&
             hasSourceInfo &&
             originalBitrate != null) {
-          final ratio = (width * height) / (originalWidth! * originalHeight!);
+          final ratio = (width * height) / (originalWidth * originalHeight);
           bitrate = (originalBitrate * ratio).round();
           if (bitrate > originalBitrate) bitrate = originalBitrate;
         }

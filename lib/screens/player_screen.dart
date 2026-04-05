@@ -101,8 +101,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _fetchJellyfinStreamData() async {
-    if (widget.isOffline || widget.baseUrl == null || widget.token == null)
+    if (widget.isOffline || widget.baseUrl == null || widget.token == null) {
       return;
+    }
     try {
       final httpClient = HttpClient()
         ..badCertificateCallback = ((cert, host, port) => true);
@@ -366,8 +367,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
       });
 
       player.stream.playing.listen((isPlaying) {
-        if (isPlaying && mounted && _isLoading)
+        if (isPlaying && mounted && _isLoading) {
           setState(() => _isLoading = false);
+        }
       });
 
       await player.open(Media(finalSource, httpHeaders: headers), play: true);
@@ -681,6 +683,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   ) {
     if (widget.isOffline) {
       List<Widget> options = [];
+      final navigator = Navigator.of(context);
 
       // 1. Opcja "Wyłączone"
       options.add(
@@ -703,7 +706,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           onTap: () {
             setState(() => _currentExternalSubtitlePath = null);
             player.setSubtitleTrack(SubtitleTrack.no());
-            Navigator.pop(context);
+            if (context.mounted) navigator.pop();
           },
         ),
       );
@@ -730,7 +733,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             onTap: () {
               setState(() => _currentExternalSubtitlePath = null);
               player.setSubtitleTrack(t);
-              Navigator.pop(context);
+              if (context.mounted) navigator.pop();
             },
           ),
         );
@@ -759,7 +762,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             onTap: () {
               setState(() => _currentExternalSubtitlePath = file.path);
               player.setSubtitleTrack(SubtitleTrack.uri(file.path));
-              Navigator.pop(context);
+              if (context.mounted) navigator.pop();
             },
           ),
         );
@@ -782,13 +785,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
               ? const Icon(Icons.check, color: Colors.deepPurpleAccent)
               : null,
           onTap: () async {
+            final navigator = Navigator.of(context);
             setState(() => _selectedSubtitleIndex = null);
             if (_selectedWidth == null) {
               _applyOriginalSubtitles();
             } else {
               await _applyExternalSubtitles();
             }
-            if (mounted) Navigator.pop(context);
+            if (context.mounted) navigator.pop();
           },
         ),
       );
@@ -810,13 +814,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ? const Icon(Icons.check, color: Colors.deepPurpleAccent)
                 : null,
             onTap: () async {
+              final navigator = Navigator.of(context);
               setState(() => _selectedSubtitleIndex = idx);
               if (_selectedWidth == null) {
                 _applyOriginalSubtitles();
               } else {
                 await _applyExternalSubtitles();
               }
-              if (mounted) Navigator.pop(context);
+              if (context.mounted) navigator.pop();
             },
           ),
         );

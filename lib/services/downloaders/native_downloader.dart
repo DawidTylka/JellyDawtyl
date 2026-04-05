@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -55,11 +56,22 @@ class NativeDownloader implements BaseDownloader {
         if (task.progress >= 0 && task.progress <= 100) {
           progressValue = task.progress / 100.0;
           progressText = "${task.progress}%";
-        } else if (task.progress < 0) {
-          double downloadedMB = (task.progress.abs() / (1024 * 1024));
-          
-          progressValue = -1.0; 
-          progressText = "Pobrano: ${downloadedMB.toStringAsFixed(1)} MB (rozmiar nieznany)";
+        } else {
+          try {
+            final file = File("$saveDir/$fileName");
+            if (file.existsSync()) {
+              double actualBytes = file.lengthSync().toDouble();
+              double downloadedMB = actualBytes / (1024 * 1024);
+              progressValue = -1.0;
+              progressText = "Pobrano: ${downloadedMB.toStringAsFixed(1)} MB";
+            } else {
+              progressValue = -1.0;
+              progressText = "Inicjalizacja...";
+            }
+          } catch (e) {
+            progressValue = -1.0;
+            progressText = "Pobieranie danych...";
+          }
         }
 
         onProgress(itemId, progressValue, progressText);

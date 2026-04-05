@@ -124,7 +124,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SwitchListTile(
                   title: Text(l10n.autoPlay),
                   subtitle: Text(l10n.autoPlaySub),
-                  activeColor: Colors.deepPurpleAccent,
+                  activeThumbColor: Colors.deepPurpleAccent,
                   value: _autoPlayNext,
                   onChanged: (val) => _updateSetting(
                     'setting_autoplay',
@@ -201,7 +201,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SwitchListTile(
                   title: Text(l10n.downloadWifiOnly),
                   subtitle: Text(l10n.downloadWifiOnlySub),
-                  activeColor: Colors.deepPurpleAccent,
+                  activeThumbColor: Colors.deepPurpleAccent,
                   value: _downloadWifiOnly,
                   onChanged: (val) => _updateSetting(
                     'setting_wifionly',
@@ -213,7 +213,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SwitchListTile(
                   title: Text(l10n.useNativeDownloader),
                   subtitle: Text(l10n.useNativeDownloaderSub),
-                  activeColor: Colors.deepPurpleAccent,
+                  activeThumbColor: Colors.deepPurpleAccent,
                   value: _useNativeDownloader,
                   onChanged: (val) => _updateSetting(
                     'setting_native_downloader',
@@ -228,7 +228,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SwitchListTile(
                   title: Text(l10n.supportCreatorAdsTitle),
                   subtitle: Text(l10n.supportCreatorAdsSubtitle),
-                  activeColor: Colors.deepPurpleAccent,
+                  activeThumbColor: Colors.deepPurpleAccent,
                   value: _showAds,
                   onChanged: _updateAdsSetting,
                 ),

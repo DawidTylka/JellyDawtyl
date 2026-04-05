@@ -4,11 +4,8 @@ import '../l10n/app_localizations.dart';
 import '../models/jellyfin_item.dart';
 import '../models/library.dart';
 import '../services/jellyfin_api.dart';
-import '../widgets/desktop_horizontal_list_view.dart';
-import 'details_screen.dart';
 import 'home_screen.dart';
 import 'downloads_screen.dart';
-import 'series_details_screen.dart';
 import 'settings_screen.dart';
 import '../widgets/ad_banner_widget.dart';
 import '../widgets/jellyfin_section.dart';
@@ -171,7 +168,18 @@ class _LibrarySelectorScreenState extends State<LibrarySelectorScreen> {
         ),
         
         const SizedBox(height: 20),
+      ],
+    );
+  }
 
+  Widget _buildNextUpSection(double screenWidth, AppLocalizations l10n) {
+    final cleanUrl = widget.baseUrl.startsWith('http')
+        ? widget.baseUrl
+        : 'https://${widget.baseUrl}';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         JellyfinSection(
           title: l10n.toWatch,
           items: _nextUpItems,
@@ -254,6 +262,14 @@ class _LibrarySelectorScreenState extends State<LibrarySelectorScreen> {
                         )
                       else if (_resumeItems.isNotEmpty)
                         _buildResumeSection(screenWidth, l10n),
+
+                      if (_isLoadingnextUpItems)
+                        const Padding(
+                          padding: EdgeInsets.all(20.0),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (_nextUpItems.isNotEmpty)
+                       _buildNextUpSection(screenWidth, l10n),
 
                       Padding(
                         padding: EdgeInsets.only(
