@@ -1,11 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter_application_1/screens/details_screen.dart';
 import '../models/movie.dart';
-import '../models/jellyfin_item.dart';
-import '../widgets/desktop_horizontal_list_view.dart';
-import 'category_items_screen.dart';
-import 'series_details_screen.dart';
 import '../widgets/ad_banner_widget.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/jellyfin_section.dart';
