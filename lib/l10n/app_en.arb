@@ -57,5 +57,65 @@
   "managePrivacySubtitle": "Change consent for displaying personalized ads",
   "loadingPrivacyOptions": "Loading privacy options...",
   "toWatch": "To Watch",
-  "lasttlyAdded": "Lastly Added"
+  "lasttlyAdded": "Lastly Added",
+  "sdCardPermissionDenied": "No permission to write to SD card. Allow in system settings.",
+  "storagePermissionDenied": "Storage access denied.",
+  "downloadPathUpdated": "Download path updated.",
+  "privacySettingsUpdated": "Privacy settings have been updated.",
+  "pickDownloadFolderTitle": "Select download folder (e.g. on SD card)",
+  "logoutTooltip": "Log out",
+  "logoutConfirmTitle": "Log out?",
+  "logoutConfirmContent": "You will need to re-enter your server details.",
+  "logout": "Log out",
+  "restoreDefaultTooltip": "Restore default",
+  "concurrentDownloads": "Concurrent downloads",
+  "concurrentDownloadsSub": "How many files to download at once",
+  "administration": "Administration",
+  "serverPanel": "Server panel",
+  "serverPanelSub": "Open Jellyfin settings in the in-app browser",
+  "enterServerAndUsername": "Please enter the server address and username.",
+  "invalidLoginOrPassword": "Invalid username or password.",
+  "connectionError": "Connection error: Cannot connect to {url}",
+  "@connectionError": {
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "serverAddressHint": "e.g. http://192.168.0.11:8096",
+  "loginAction": "Log in",
+  "loadingPanel": "Loading panel...",
+  "fromBeginning": "From beginning (Online)",
+  "selectQualitySeason": "Season {number} - select quality",
+  "@selectQualitySeason": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "advancedTranscoding": "Advanced Transcoding",
+  "hwAccelTitle": "Hardware Acceleration",
+  "hwAccelSub": "Forces the server to use a specific decoder",
+  "autoServer": "Auto (Server)",
+  "cpuLimitTitle": "CPU Core Limit",
+  "cpuLimitSub": "Limits server CPU processing power",
+  "autoNoLimit": "Auto (No limit)",
+  "core1": "1 core",
+  "cores2": "2 cores",
+  "cores4": "4 cores",
+  "cores8": "8 cores",
+  "fpsLimitTitle": "FPS Limit",
+  "fpsLimitSub": "Forces dropping excess frames",
+  "autoOriginal": "Auto (Original)",
+  "fps24": "24 FPS (Cinematic)",
+  "fps30": "30 FPS",
+  "fps60": "60 FPS",
+  "audioQualityTitle": "Audio Quality",
+  "audioQualitySub": "Audio track bitrate",
+  "audio320": "320 kbps (High)",
+  "audio192": "192 kbps (Good)",
+  "audio128": "128 kbps (Standard)",
+  "audio96": "96 kbps (Low)"
 }

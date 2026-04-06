@@ -378,7 +378,7 @@ abstract class AppLocalizations {
   ///
   /// In pl, this message translates to:
   /// **'Sezon {number} - wybierz jakość'**
-  String selectQualitySeason(Object number);
+  String selectQualitySeason(int number);
 
   /// No description provided for @supportCreatorTitle.
   ///
@@ -445,6 +445,276 @@ abstract class AppLocalizations {
   /// In pl, this message translates to:
   /// **'Ostatnio dodane'**
   String get lasttlyAdded;
+
+  /// No description provided for @sdCardPermissionDenied.
+  ///
+  /// In pl, this message translates to:
+  /// **'Brak uprawnień do zapisu na karcie SD. Zezwól w ustawieniach systemu.'**
+  String get sdCardPermissionDenied;
+
+  /// No description provided for @storagePermissionDenied.
+  ///
+  /// In pl, this message translates to:
+  /// **'Odmowa dostępu do pamięci.'**
+  String get storagePermissionDenied;
+
+  /// No description provided for @downloadPathUpdated.
+  ///
+  /// In pl, this message translates to:
+  /// **'Zaktualizowano ścieżkę pobierania.'**
+  String get downloadPathUpdated;
+
+  /// No description provided for @privacySettingsUpdated.
+  ///
+  /// In pl, this message translates to:
+  /// **'Ustawienia prywatności zostały zaktualizowane.'**
+  String get privacySettingsUpdated;
+
+  /// No description provided for @pickDownloadFolderTitle.
+  ///
+  /// In pl, this message translates to:
+  /// **'Wybierz folder pobierania (np. na karcie SD)'**
+  String get pickDownloadFolderTitle;
+
+  /// No description provided for @logoutTooltip.
+  ///
+  /// In pl, this message translates to:
+  /// **'Wyloguj'**
+  String get logoutTooltip;
+
+  /// No description provided for @logoutConfirmTitle.
+  ///
+  /// In pl, this message translates to:
+  /// **'Wylogować?'**
+  String get logoutConfirmTitle;
+
+  /// No description provided for @logoutConfirmContent.
+  ///
+  /// In pl, this message translates to:
+  /// **'Będziesz musiał ponownie wpisać dane serwera.'**
+  String get logoutConfirmContent;
+
+  /// No description provided for @logout.
+  ///
+  /// In pl, this message translates to:
+  /// **'Wyloguj'**
+  String get logout;
+
+  /// No description provided for @restoreDefaultTooltip.
+  ///
+  /// In pl, this message translates to:
+  /// **'Przywróć domyślny'**
+  String get restoreDefaultTooltip;
+
+  /// No description provided for @concurrentDownloads.
+  ///
+  /// In pl, this message translates to:
+  /// **'Jednoczesne pobierania'**
+  String get concurrentDownloads;
+
+  /// No description provided for @concurrentDownloadsSub.
+  ///
+  /// In pl, this message translates to:
+  /// **'Ile plików pobierać naraz'**
+  String get concurrentDownloadsSub;
+
+  /// No description provided for @administration.
+  ///
+  /// In pl, this message translates to:
+  /// **'Administracja'**
+  String get administration;
+
+  /// No description provided for @serverPanel.
+  ///
+  /// In pl, this message translates to:
+  /// **'Panel serwera'**
+  String get serverPanel;
+
+  /// No description provided for @serverPanelSub.
+  ///
+  /// In pl, this message translates to:
+  /// **'Otwórz ustawienia Jellyfin w przeglądarce wewnątrz aplikacji'**
+  String get serverPanelSub;
+
+  /// No description provided for @enterServerAndUsername.
+  ///
+  /// In pl, this message translates to:
+  /// **'Podaj adres serwera i nazwę użytkownika.'**
+  String get enterServerAndUsername;
+
+  /// No description provided for @invalidLoginOrPassword.
+  ///
+  /// In pl, this message translates to:
+  /// **'Błędny login lub hasło.'**
+  String get invalidLoginOrPassword;
+
+  /// No description provided for @connectionError.
+  ///
+  /// In pl, this message translates to:
+  /// **'Błąd połączenia: Nie można połączyć się z {url}'**
+  String connectionError(String url);
+
+  /// No description provided for @serverAddressHint.
+  ///
+  /// In pl, this message translates to:
+  /// **'np. http://192.168.0.11:8096'**
+  String get serverAddressHint;
+
+  /// No description provided for @loginAction.
+  ///
+  /// In pl, this message translates to:
+  /// **'Zaloguj się'**
+  String get loginAction;
+
+  /// No description provided for @loadingPanel.
+  ///
+  /// In pl, this message translates to:
+  /// **'Ładowanie panelu...'**
+  String get loadingPanel;
+
+  /// No description provided for @fromBeginning.
+  ///
+  /// In pl, this message translates to:
+  /// **'Od początku (Online)'**
+  String get fromBeginning;
+
+  /// No description provided for @advancedTranscoding.
+  ///
+  /// In pl, this message translates to:
+  /// **'Zaawansowane transkodowanie'**
+  String get advancedTranscoding;
+
+  /// No description provided for @hwAccelTitle.
+  ///
+  /// In pl, this message translates to:
+  /// **'Akceleracja sprzętowa'**
+  String get hwAccelTitle;
+
+  /// No description provided for @hwAccelSub.
+  ///
+  /// In pl, this message translates to:
+  /// **'Wymusza na serwerze konkretny dekoder'**
+  String get hwAccelSub;
+
+  /// No description provided for @autoServer.
+  ///
+  /// In pl, this message translates to:
+  /// **'Automat (Serwer)'**
+  String get autoServer;
+
+  /// No description provided for @cpuLimitTitle.
+  ///
+  /// In pl, this message translates to:
+  /// **'Limit rdzeni CPU'**
+  String get cpuLimitTitle;
+
+  /// No description provided for @cpuLimitSub.
+  ///
+  /// In pl, this message translates to:
+  /// **'Ogranicza moc procesora serwera'**
+  String get cpuLimitSub;
+
+  /// No description provided for @autoNoLimit.
+  ///
+  /// In pl, this message translates to:
+  /// **'Automat (Brak limitu)'**
+  String get autoNoLimit;
+
+  /// No description provided for @core1.
+  ///
+  /// In pl, this message translates to:
+  /// **'1 rdzeń'**
+  String get core1;
+
+  /// No description provided for @cores2.
+  ///
+  /// In pl, this message translates to:
+  /// **'2 rdzenie'**
+  String get cores2;
+
+  /// No description provided for @cores4.
+  ///
+  /// In pl, this message translates to:
+  /// **'4 rdzenie'**
+  String get cores4;
+
+  /// No description provided for @cores8.
+  ///
+  /// In pl, this message translates to:
+  /// **'8 rdzeni'**
+  String get cores8;
+
+  /// No description provided for @fpsLimitTitle.
+  ///
+  /// In pl, this message translates to:
+  /// **'Limit FPS'**
+  String get fpsLimitTitle;
+
+  /// No description provided for @fpsLimitSub.
+  ///
+  /// In pl, this message translates to:
+  /// **'Wymusza zrzucanie nadmiarowych klatek'**
+  String get fpsLimitSub;
+
+  /// No description provided for @autoOriginal.
+  ///
+  /// In pl, this message translates to:
+  /// **'Automat (Oryginał)'**
+  String get autoOriginal;
+
+  /// No description provided for @fps24.
+  ///
+  /// In pl, this message translates to:
+  /// **'24 FPS (Kino)'**
+  String get fps24;
+
+  /// No description provided for @fps30.
+  ///
+  /// In pl, this message translates to:
+  /// **'30 FPS'**
+  String get fps30;
+
+  /// No description provided for @fps60.
+  ///
+  /// In pl, this message translates to:
+  /// **'60 FPS'**
+  String get fps60;
+
+  /// No description provided for @audioQualityTitle.
+  ///
+  /// In pl, this message translates to:
+  /// **'Jakość Audio'**
+  String get audioQualityTitle;
+
+  /// No description provided for @audioQualitySub.
+  ///
+  /// In pl, this message translates to:
+  /// **'Bitrate ścieżki dźwiękowej'**
+  String get audioQualitySub;
+
+  /// No description provided for @audio320.
+  ///
+  /// In pl, this message translates to:
+  /// **'320 kbps (Wysoka)'**
+  String get audio320;
+
+  /// No description provided for @audio192.
+  ///
+  /// In pl, this message translates to:
+  /// **'192 kbps (Dobra)'**
+  String get audio192;
+
+  /// No description provided for @audio128.
+  ///
+  /// In pl, this message translates to:
+  /// **'128 kbps (Standard)'**
+  String get audio128;
+
+  /// No description provided for @audio96.
+  ///
+  /// In pl, this message translates to:
+  /// **'96 kbps (Niska)'**
+  String get audio96;
 }
 
 class _AppLocalizationsDelegate

@@ -131,24 +131,39 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
         ? l10n.offlineFiles
         : _currentFolder!.path.split(Platform.pathSeparator).last;
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: _isSelectionMode
-            ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)
-            : Theme.of(context).appBarTheme.backgroundColor,
-        elevation: 0,
-        title: Text(
-          _isSelectionMode ? "Zaznaczono: ${_selectedIndices.length}" : title,
-        ),
-        leading: _isSelectionMode
-            ? IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => setState(() {
-                  _isSelectionMode = false;
-                  _selectedIndices.clear();
-                }),
-              )
-            : (_currentFolder != null
+    return PopScope(
+      canPop: !_isSelectionMode && _currentFolder == null,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+
+        if (_isSelectionMode) {
+          setState(() {
+            _isSelectionMode = false;
+            _selectedIndices.clear();
+          });
+        } else if (_currentFolder != null) {
+          setState(() => _currentFolder = null);
+          _loadData();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: _isSelectionMode
+              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)
+              : Theme.of(context).appBarTheme.backgroundColor,
+          elevation: 0,
+          title: Text(
+            _isSelectionMode ? "Zaznaczono: ${_selectedIndices.length}" : title,
+          ),
+          leading: _isSelectionMode
+              ? IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => setState(() {
+                    _isSelectionMode = false;
+                    _selectedIndices.clear();
+                  }),
+                )
+              : (_currentFolder != null
                   ? IconButton(
                       icon: const Icon(Icons.arrow_back),
                       onPressed: () {
@@ -157,25 +172,26 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                       },
                     )
                   : null),
-        actions: [
-          if (_isSelectionMode)
-            IconButton(
-              icon: const Icon(Icons.delete_sweep),
-              onPressed: () => _deleteSelected(l10n),
-            )
-          else
-            IconButton(icon: const Icon(Icons.refresh), onPressed: _loadData),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: Colors.deepPurple),
-            )
-          : _items.isEmpty
-          ? _buildEmptyState(l10n)
-          : (_currentFolder == null ? _buildFolderGrid() : _buildFileList()),
+          actions: [
+            if (_isSelectionMode)
+              IconButton(
+                icon: const Icon(Icons.delete_sweep),
+                onPressed: () => _deleteSelected(l10n),
+              )
+            else
+              IconButton(icon: const Icon(Icons.refresh), onPressed: _loadData),
+          ],
+        ),
+        body: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(color: Colors.deepPurple),
+              )
+            : _items.isEmpty
+            ? _buildEmptyState(l10n)
+            : (_currentFolder == null ? _buildFolderGrid() : _buildFileList()),
 
-      bottomNavigationBar: const AdBannerWidget(),
+        bottomNavigationBar: const AdBannerWidget(),
+      ),
     );
   }
 

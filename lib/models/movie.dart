@@ -10,6 +10,8 @@ class Movie extends JellyfinItem {
     super.parentIndexNumber,
     super.seriesName,
     super.seriesId,
+    super.runTimeTicks,
+    super.userData,
   });
 
   factory Movie.fromJson(Map<String, dynamic> json) {
@@ -22,6 +24,8 @@ class Movie extends JellyfinItem {
       parentIndexNumber: json['ParentIndexNumber'],
       seriesName: json['SeriesName'],
       seriesId: json['SeriesId'],
+      runTimeTicks: json['RunTimeTicks'],
+      userData: json['UserData'] != null ? UserData.fromJson(json['UserData']) : null,
     );
   }
 }

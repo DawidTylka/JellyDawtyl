@@ -151,7 +151,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get selectQualitySeries => 'Select quality for the entire series';
 
   @override
-  String selectQualitySeason(Object number) {
+  String selectQualitySeason(int number) {
     return 'Season $number - select quality';
   }
 
@@ -191,4 +191,145 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get lasttlyAdded => 'Lastly Added';
+
+  @override
+  String get sdCardPermissionDenied =>
+      'No permission to write to SD card. Allow in system settings.';
+
+  @override
+  String get storagePermissionDenied => 'Storage access denied.';
+
+  @override
+  String get downloadPathUpdated => 'Download path updated.';
+
+  @override
+  String get privacySettingsUpdated => 'Privacy settings have been updated.';
+
+  @override
+  String get pickDownloadFolderTitle =>
+      'Select download folder (e.g. on SD card)';
+
+  @override
+  String get logoutTooltip => 'Log out';
+
+  @override
+  String get logoutConfirmTitle => 'Log out?';
+
+  @override
+  String get logoutConfirmContent =>
+      'You will need to re-enter your server details.';
+
+  @override
+  String get logout => 'Log out';
+
+  @override
+  String get restoreDefaultTooltip => 'Restore default';
+
+  @override
+  String get concurrentDownloads => 'Concurrent downloads';
+
+  @override
+  String get concurrentDownloadsSub => 'How many files to download at once';
+
+  @override
+  String get administration => 'Administration';
+
+  @override
+  String get serverPanel => 'Server panel';
+
+  @override
+  String get serverPanelSub => 'Open Jellyfin settings in the in-app browser';
+
+  @override
+  String get enterServerAndUsername =>
+      'Please enter the server address and username.';
+
+  @override
+  String get invalidLoginOrPassword => 'Invalid username or password.';
+
+  @override
+  String connectionError(String url) {
+    return 'Connection error: Cannot connect to $url';
+  }
+
+  @override
+  String get serverAddressHint => 'e.g. http://192.168.0.11:8096';
+
+  @override
+  String get loginAction => 'Log in';
+
+  @override
+  String get loadingPanel => 'Loading panel...';
+
+  @override
+  String get fromBeginning => 'From beginning (Online)';
+
+  @override
+  String get advancedTranscoding => 'Advanced Transcoding';
+
+  @override
+  String get hwAccelTitle => 'Hardware Acceleration';
+
+  @override
+  String get hwAccelSub => 'Forces the server to use a specific decoder';
+
+  @override
+  String get autoServer => 'Auto (Server)';
+
+  @override
+  String get cpuLimitTitle => 'CPU Core Limit';
+
+  @override
+  String get cpuLimitSub => 'Limits server CPU processing power';
+
+  @override
+  String get autoNoLimit => 'Auto (No limit)';
+
+  @override
+  String get core1 => '1 core';
+
+  @override
+  String get cores2 => '2 cores';
+
+  @override
+  String get cores4 => '4 cores';
+
+  @override
+  String get cores8 => '8 cores';
+
+  @override
+  String get fpsLimitTitle => 'FPS Limit';
+
+  @override
+  String get fpsLimitSub => 'Forces dropping excess frames';
+
+  @override
+  String get autoOriginal => 'Auto (Original)';
+
+  @override
+  String get fps24 => '24 FPS (Cinematic)';
+
+  @override
+  String get fps30 => '30 FPS';
+
+  @override
+  String get fps60 => '60 FPS';
+
+  @override
+  String get audioQualityTitle => 'Audio Quality';
+
+  @override
+  String get audioQualitySub => 'Audio track bitrate';
+
+  @override
+  String get audio320 => '320 kbps (High)';
+
+  @override
+  String get audio192 => '192 kbps (Good)';
+
+  @override
+  String get audio128 => '128 kbps (Standard)';
+
+  @override
+  String get audio96 => '96 kbps (Low)';
 }

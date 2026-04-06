@@ -57,5 +57,65 @@
   "managePrivacySubtitle": "Zmień zgodę na wyświetlanie spersonalizowanych reklam",
   "loadingPrivacyOptions": "Ładowanie opcji prywatności...",
   "toWatch": "Do obejrzenia",
-  "lasttlyAdded":"Ostatnio dodane"
+  "lasttlyAdded": "Ostatnio dodane",
+  "sdCardPermissionDenied": "Brak uprawnień do zapisu na karcie SD. Zezwól w ustawieniach systemu.",
+  "storagePermissionDenied": "Odmowa dostępu do pamięci.",
+  "downloadPathUpdated": "Zaktualizowano ścieżkę pobierania.",
+  "privacySettingsUpdated": "Ustawienia prywatności zostały zaktualizowane.",
+  "pickDownloadFolderTitle": "Wybierz folder pobierania (np. na karcie SD)",
+  "logoutTooltip": "Wyloguj",
+  "logoutConfirmTitle": "Wylogować?",
+  "logoutConfirmContent": "Będziesz musiał ponownie wpisać dane serwera.",
+  "logout": "Wyloguj",
+  "restoreDefaultTooltip": "Przywróć domyślny",
+  "concurrentDownloads": "Jednoczesne pobierania",
+  "concurrentDownloadsSub": "Ile plików pobierać naraz",
+  "administration": "Administracja",
+  "serverPanel": "Panel serwera",
+  "serverPanelSub": "Otwórz ustawienia Jellyfin w przeglądarce wewnątrz aplikacji",
+  "enterServerAndUsername": "Podaj adres serwera i nazwę użytkownika.",
+  "invalidLoginOrPassword": "Błędny login lub hasło.",
+  "connectionError": "Błąd połączenia: Nie można połączyć się z {url}",
+  "@connectionError": {
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "serverAddressHint": "np. http://192.168.0.11:8096",
+  "loginAction": "Zaloguj się",
+  "loadingPanel": "Ładowanie panelu...",
+  "fromBeginning": "Od początku (Online)",
+  "selectQualitySeason": "Sezon {number} - wybierz jakość",
+  "@selectQualitySeason": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "advancedTranscoding": "Zaawansowane transkodowanie",
+  "hwAccelTitle": "Akceleracja sprzętowa",
+  "hwAccelSub": "Wymusza na serwerze konkretny dekoder",
+  "autoServer": "Automat (Serwer)",
+  "cpuLimitTitle": "Limit rdzeni CPU",
+  "cpuLimitSub": "Ogranicza moc procesora serwera",
+  "autoNoLimit": "Automat (Brak limitu)",
+  "core1": "1 rdzeń",
+  "cores2": "2 rdzenie",
+  "cores4": "4 rdzenie",
+  "cores8": "8 rdzeni",
+  "fpsLimitTitle": "Limit FPS",
+  "fpsLimitSub": "Wymusza zrzucanie nadmiarowych klatek",
+  "autoOriginal": "Automat (Oryginał)",
+  "fps24": "24 FPS (Kino)",
+  "fps30": "30 FPS",
+  "fps60": "60 FPS",
+  "audioQualityTitle": "Jakość Audio",
+  "audioQualitySub": "Bitrate ścieżki dźwiękowej",
+  "audio320": "320 kbps (Wysoka)",
+  "audio192": "192 kbps (Dobra)",
+  "audio128": "128 kbps (Standard)",
+  "audio96": "96 kbps (Niska)"
 }

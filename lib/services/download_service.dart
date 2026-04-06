@@ -60,7 +60,7 @@ class DownloadService {
     _isProcessing = true;
 
     try {
-      const int maxConcurrent = 1;
+      int maxConcurrent = await _storage.getInt('setting_max_concurrent_downloads', defaultValue: 1);
 
       while (_queue.isNotEmpty && _activeCount < maxConcurrent) {
         final Future<void> Function() task = _queue.removeAt(0);
@@ -171,17 +171,42 @@ class DownloadService {
       Directory seriesDir = Directory('$baseDir/$safeFolderName');
       if (!seriesDir.existsSync()) seriesDir.createSync(recursive: true);
 
+      File targetFile = File('${seriesDir.path}/$fileName');
+      if (targetFile.existsSync()) {
+        try {
+          targetFile.deleteSync();
+          debugPrint("Usunięto stary plik przed nowym pobraniem: ${targetFile.path}");
+        } catch (e) {
+          debugPrint("Nie udało się usunąć starego pliku: $e");
+        }
+      }
+
       await _downloadMetadataImages(item, baseUrl, token, seriesDir, fileName);
 
-      String downloadUrl = qualityLabel == "original"
-          ? "$baseUrl/Items/$itemId/Download?api_key=$token"
-          : "$baseUrl/Videos/$itemId/stream.mp4?api_key=$token&Static=false&VideoCodec=h264&AudioCodec=aac&VideoProfile=main&MaxFramerate=24&AudioBitrate=96000&MaxAudioChannels=2&TranscodingMaxType=Vaapi&CpuCoreLimit=2&EnableSubtitlesInManifest=false&PlaySessionId=${DateTime.now().millisecondsSinceEpoch}";
+      final storage = StorageService();
+      final hwAccel = await storage.getString('setting_hw_accel') ?? 'auto';
+      final cpuLimit = await storage.getString('setting_cpu_limit') ?? 'auto';
+      final maxFps = await storage.getString('setting_max_fps') ?? 'auto';
+      final audioBitrate = await storage.getString('setting_audio_bitrate') ?? 'auto';
 
-      if (qualityLabel != "original" && maxWidth != null) {
-        downloadUrl += "&maxWidth=$maxWidth";
-        if (bitrate != null) downloadUrl += "&videoBitrate=$bitrate";
-        downloadUrl += "&VideoBitratePreroll=0&FillMethod=Preserve";
-      }
+      String urlArgs = "&Static=false"
+          "&VideoCodec=h264"
+          "&AudioCodec=aac,mp3"
+          "&MaxAudioChannels=2"
+          "&EnableSubtitlesInManifest=false"
+          "&PlaySessionId=${DateTime.now().millisecondsSinceEpoch}";
+
+      if (maxWidth != null) urlArgs += "&MaxWidth=$maxWidth";
+      if (bitrate != null) urlArgs += "&VideoBitrate=$bitrate";
+
+      if (hwAccel != 'auto') urlArgs += "&TranscodingMaxType=$hwAccel";
+      if (cpuLimit != 'auto') urlArgs += "&CpuCoreLimit=$cpuLimit";
+      if (maxFps != 'auto') urlArgs += "&MaxFramerate=$maxFps";
+      if (audioBitrate != 'auto') urlArgs += "&AudioBitrate=$audioBitrate";
+
+      String downloadUrl = qualityLabel == "original"
+        ? "$baseUrl/Videos/$itemId/stream.mp4?api_key=$token&Static=true"
+        : "$baseUrl/Videos/$itemId/stream.mp4?api_key=$token$urlArgs";
 
       BaseDownloader downloader = await _getDownloaderInstance();
 

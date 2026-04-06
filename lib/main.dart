@@ -91,7 +91,6 @@ class _JellyfinAppState extends State<JellyfinApp> {
     _checkAdPreference();
   }
 
-  // --- SPRAWDZANIE PREFERENCJI REKLAM ---
   Future<void> _checkAdPreference() async {
     final storage = StorageService();
 
@@ -676,6 +675,9 @@ class _RestartWidgetState extends State<RestartWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return KeyedSubtree(key: key, child: widget.child);
+    if (context.mounted) {
+      return KeyedSubtree(key: key, child: widget.child);
+    }
+    return widget.child;
   }
 }

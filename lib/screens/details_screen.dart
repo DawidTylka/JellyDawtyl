@@ -116,6 +116,26 @@ class _DetailsScreenState extends State<DetailsScreen> {
         ? "${widget.baseUrl}/Items/${widget.item.id}/Images/Primary?quality=90"
         : "${widget.baseUrl}/Items/${widget.item.id}/Images/Backdrop?quality=90&EnableParentDesigns=true";
 
+    final num? positionTicks = widget.item.userData?.playbackPositionTicks;
+    final num? runTimeTicks = widget.item.runTimeTicks;
+    
+    int resumePositionMs = 0;
+    double progress = 0.0;
+    bool canResume = false;
+
+    if (positionTicks != null && positionTicks > 0) {
+      resumePositionMs = (positionTicks / 10000).floor();
+      
+      if (runTimeTicks != null && runTimeTicks > 0) {
+        progress = positionTicks / runTimeTicks;
+        if (progress > 0.01 && progress < 0.95) {
+            canResume = true;
+        }
+      } else {
+        canResume = true; 
+      }
+    }
+
     return Scaffold(
       appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
       extendBodyBehindAppBar: true,
@@ -139,6 +159,15 @@ class _DetailsScreenState extends State<DetailsScreen> {
                 child: const Icon(Icons.movie, color: Colors.white24, size: 80),
               ),
             ),
+
+            if (canResume && progress > 0)
+              LinearProgressIndicator(
+                 value: progress,
+                 backgroundColor: Colors.grey[900],
+                 color: Colors.deepPurpleAccent,
+                 minHeight: 4.0,
+              ),
+
             Padding(
               padding: const EdgeInsets.all(20.0),
               child: Column(
@@ -166,12 +195,28 @@ class _DetailsScreenState extends State<DetailsScreen> {
                       final activeDownload = activeDownloadsMap[widget.item.id];
                       return Column(
                         children: [
-                          _buildActionButton(
-                            l10n.watchOnline,
-                            Icons.play_arrow,
-                            Colors.white,
-                            () => _playVideo(false),
-                          ),
+                          if (canResume) ...[
+                            _buildActionButton(
+                              l10n.continueWatching,
+                              Icons.play_circle_fill,
+                              Colors.deepPurpleAccent,
+                              () => _playVideo(false, startPositionMs: resumePositionMs),
+                            ),
+                            SizedBox(height: 12),
+                            _buildActionButton(
+                              l10n.fromBeginning,
+                              Icons.replay,
+                              Colors.white,
+                              () => _playVideo(false, startPositionMs: 0),
+                            ),
+                          ] else ...[
+                            _buildActionButton(
+                              l10n.watchOnline,
+                              Icons.play_arrow,
+                              Colors.white,
+                              () => _playVideo(false),
+                            ),
+                          ],
                           if (activeDownload != null) ...[
                             const SizedBox(height: 12),
                             _buildProgressBar(activeDownload, l10n),
@@ -328,7 +373,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
     );
   }
 
-  void _playVideo(bool offline) {
+  void _playVideo(bool offline, {int? startPositionMs}) {
     String url = offline
         ? _localFilePath!
         : "${widget.baseUrl}/Videos/${widget.item.id}/stream.mp4"
@@ -344,6 +389,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
           token: widget.token,
           userId: widget.userId,
           isOffline: offline,
+          startPositionMs: startPositionMs,
         ),
       ),
     );

@@ -21,6 +21,7 @@ class PlayerScreen extends StatefulWidget {
   final String? token;
   final String? userId;
   final bool isOffline;
+  final int? startPositionMs;
 
   const PlayerScreen({
     super.key,
@@ -31,6 +32,7 @@ class PlayerScreen extends StatefulWidget {
     this.token,
     this.userId,
     this.isOffline = false,
+    this.startPositionMs,
   });
 
   @override
@@ -67,6 +69,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   List<File> _localSubtitleFiles = [];
 
   bool _isTransitioningToNext = false;
+  bool _hasPerformedInitialSeek = false;
 
   @override
   void initState() {
@@ -248,6 +251,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       String audioParam = _selectedAudioIndex != null
           ? '&AudioStreamIndex=$_selectedAudioIndex'
           : '';
+          
       return '${widget.baseUrl}/Videos/${widget.itemId}/master.m3u8'
           '?api_key=${widget.token}'
           '&MediaSourceId=${widget.itemId}'
@@ -320,6 +324,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         if (duration.inSeconds > 0) {
           if (!_firstLoadDone) {
             _firstLoadDone = true;
+
             if (_selectedWidth == null) {
               _applyOriginalAudio();
               _applyOriginalSubtitles();
@@ -363,16 +368,38 @@ class _PlayerScreenState extends State<PlayerScreen> {
         if (mounted) {
           final l10n = AppLocalizations.of(context)!;
           setState(() => _error = l10n.playerError);
+          debugPrint("Player Error: $event");
         }
       });
 
-      player.stream.playing.listen((isPlaying) {
-        if (isPlaying && mounted && _isLoading) {
-          setState(() => _isLoading = false);
+      player.stream.playing.listen((isPlaying) async {
+        if (isPlaying && mounted) {
+          if (_isLoading) {
+            setState(() => _isLoading = false);
+          }
+
+          if (!_hasPerformedInitialSeek && 
+              widget.startPositionMs != null && 
+              widget.startPositionMs! > 0) {
+            
+            _hasPerformedInitialSeek = true; 
+
+            await player.pause();
+            
+            await Future.delayed(const Duration(milliseconds: 400));
+            await player.seek(Duration(milliseconds: widget.startPositionMs!));
+            debugPrint("=== SUCCESS: WZNOWIONO NA ${widget.startPositionMs} ms ===");
+            
+            await Future.delayed(const Duration(milliseconds: 100));
+            await player.play();
+          }
         }
       });
-
-      await player.open(Media(finalSource, httpHeaders: headers), play: true);
+      
+      await player.open(
+        Media(finalSource, httpHeaders: headers), 
+        play: true
+      );
 
       if (!widget.isOffline && widget.baseUrl != null) {
         _startProgressReporting();
@@ -381,6 +408,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (mounted) {
         final l10n = AppLocalizations.of(context)!;
         setState(() => _error = l10n.playerError);
+        debugPrint("Initialize Error: $e");
       }
     }
   }

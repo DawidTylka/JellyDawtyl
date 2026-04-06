@@ -1,3 +1,15 @@
+class UserData {
+  final int? playbackPositionTicks;
+
+  UserData({this.playbackPositionTicks});
+
+  factory UserData.fromJson(Map<String, dynamic> json) {
+    return UserData(
+      playbackPositionTicks: json['PlaybackPositionTicks'],
+    );
+  }
+}
+
 abstract class JellyfinItem {
   final String id;
   final String name;
@@ -7,6 +19,8 @@ abstract class JellyfinItem {
   final int? parentIndexNumber;
   final String? seriesName;
   final String? seriesId;
+  final int? runTimeTicks; 
+  final UserData? userData;
 
   JellyfinItem({
     required this.id,
@@ -17,5 +31,7 @@ abstract class JellyfinItem {
     this.parentIndexNumber,
     this.seriesName,
     this.seriesId,
+    this.runTimeTicks,
+    this.userData,
   });
 }

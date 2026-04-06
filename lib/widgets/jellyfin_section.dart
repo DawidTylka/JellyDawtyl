@@ -118,6 +118,15 @@ class JellyfinSection extends StatelessWidget {
 
             final imageUrl = "$cleanUrl/Items/$itemId/Images/$imageTag?quality=90";
 
+            final num? positionTicks = item.userData?.playbackPositionTicks; 
+            final num? runTimeTicks = item.runTimeTicks;
+
+            double progress = 0.0;
+            if (positionTicks != null && runTimeTicks != null && runTimeTicks > 0) {
+              progress = positionTicks / runTimeTicks;
+              if (progress > 1.0) progress = 1.0;
+            }
+
             return MouseRegion(
               cursor: SystemMouseCursors.click,
               child: GestureDetector(
@@ -173,6 +182,18 @@ class JellyfinSection extends StatelessWidget {
                                       Color(0xAA000000),
                                     ],
                                   ),
+                                ),
+                              ),
+                              if (progress > 0.0)
+                              Positioned(
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                child: LinearProgressIndicator(
+                                  value: progress,
+                                  backgroundColor: Colors.white24,
+                                  color: Colors.deepPurpleAccent,
+                                  minHeight: 4.0, // Grubość paska
                                 ),
                               ),
                             ],

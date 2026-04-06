@@ -178,7 +178,7 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Text(
-              "Sezon ${seasonEpisodes.first.parentIndexNumber} - wybierz jakość",
+              l10n.selectQualitySeason(seasonEpisodes.first.parentIndexNumber ?? 0),
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 18,
@@ -288,12 +288,6 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
                   ),
                   title: Row(
                     children: [
-                      const Icon(
-                        Icons.keyboard_arrow_down,
-                        color: Colors.white70,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 6),
                       Text(
                         "SEZON ${entry.key}",
                         style: const TextStyle(
@@ -327,7 +321,7 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
                             size: 18,
                           ),
                           label: Text(
-                            "Pobierz sezon",
+                            l10n.downloadSeason,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 13,
