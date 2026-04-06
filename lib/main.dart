@@ -37,45 +37,12 @@ void main() async {
     await FlutterDownloader.initialize(debug: true, ignoreSsl: true);
   }
 
-  final storage = StorageService();
-  final creds = await storage.getCredentials();
-
-  Widget startScreen = LoginScreen(initialUrl: creds?['baseUrl']);
-
-  if (creds != null &&
-      creds['token'] != null &&
-      creds['baseUrl'] != null &&
-      creds['userId'] != null) {
-    try {
-      final api = JellyfinApi();
-      final libraries = await api
-          .fetchUserLibraries(
-            creds['baseUrl']!,
-            creds['token']!,
-            creds['userId']!,
-          )
-          .timeout(const Duration(seconds: 10));
-
-      if (libraries.isNotEmpty) {
-        startScreen = LibrarySelectorScreen(
-          libraries: libraries,
-          baseUrl: creds['baseUrl']!,
-          token: creds['token']!,
-          userId: creds['userId']!,
-        );
-      }
-    } catch (e) {
-      debugPrint("Błąd autologowania: $e");
-    }
-  }
-
-  runApp(RestartWidget(child: JellyfinApp(startScreen: startScreen)));
+  runApp(RestartWidget(child: JellyfinApp()));
 }
 
 class JellyfinApp extends StatefulWidget {
-  final Widget startScreen;
 
-  const JellyfinApp({super.key, required this.startScreen});
+  const JellyfinApp({super.key});
 
   @override
   State<JellyfinApp> createState() => _JellyfinAppState();
@@ -93,6 +60,10 @@ class _JellyfinAppState extends State<JellyfinApp> {
 
   Future<void> _checkAdPreference() async {
     final storage = StorageService();
+
+    if (Platform.isWindows) {
+      await storage.saveString('setting_ads_choice', 'no');
+    }
 
     final adsChoice = await storage.getString('setting_ads_choice');
 
@@ -179,6 +150,44 @@ class _JellyfinAppState extends State<JellyfinApp> {
     debugPrint("✅ AdMob załadowany pomyślnie!");
   }
 
+  Future<Map<String, dynamic>?> checkAppData() async {
+    final storage = StorageService();
+  
+    final creds = await storage.getCredentials();
+
+    if (_isLoadingPref) {
+      return {'loadingPreference': true};
+    }
+
+    if (_showAdPrompt) {
+      return {'needsAdsPrompt': true};
+    }
+
+    if (creds == null || creds['token'] == null) return null;
+
+    try {
+      final api = JellyfinApi();
+      final libraries = await api.fetchUserLibraries(
+        creds['baseUrl']!,
+        creds['token']!,
+        creds['userId']!,
+      ).timeout(const Duration(seconds: 10));
+
+      return {
+        'creds': creds,
+        'libraries': libraries,
+      };
+    } catch (e) {
+      debugPrint("Błąd weryfikacji tokena: $e");
+      
+      if (e.toString().contains('401')) {
+        await storage.clearAll();
+        return null; 
+      }
+      return null; 
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     const background = Color(0xFF0F1115);
@@ -187,6 +196,49 @@ class _JellyfinAppState extends State<JellyfinApp> {
     const secondary = Color(0xFF22D3EE);
 
     return MaterialApp(
+      home: FutureBuilder<Map<String, dynamic>?>(
+        future: checkAppData(), 
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+
+          final data = snapshot.data;
+
+          if (data?['loadingPreference'] == true) {
+            return const Scaffold(
+              backgroundColor: background,
+              body: Center(child: CircularProgressIndicator(color: accent)),
+            );
+          }
+
+          if (data?['needsAdsPrompt'] == true) {
+            return _buildAdPromptScreen(
+              context,
+              background,
+              surface,
+              accent,
+            );
+          }
+
+          final libraries = data?['libraries'];
+
+          if (data != null && libraries.isNotEmpty) {
+            final creds = data['creds'] as Map<String, String>;
+
+            return LibrarySelectorScreen(
+              libraries: libraries,
+              baseUrl: creds['baseUrl']!,
+              token: creds['token']!,
+              userId: creds['userId']!,
+            );
+          }
+
+          return LoginScreen(initialUrl: data?['creds']?['baseUrl']);
+        },
+      ),
       debugShowCheckedModeBanner: false,
       title: 'Jellyfin Client',
       scrollBehavior: const MaterialScrollBehavior().copyWith(
@@ -263,28 +315,6 @@ class _JellyfinAppState extends State<JellyfinApp> {
           ),
         ),
       ),
-      home: Builder(
-      builder: (innerContext) {
-        // Teraz używamy innerContext, który jest JUŻ WEWNĄTRZ MaterialApp
-        // i ma dostęp do lokalizacji!
-
-        if (_isLoadingPref) {
-          return const Scaffold(
-            backgroundColor: background,
-            body: Center(child: CircularProgressIndicator(color: accent)),
-          );
-        } else if (_showAdPrompt) {
-          return _buildAdPromptScreen(
-            innerContext, // Przekazujemy POPRAWNY kontekst
-            background,
-            surface,
-            accent,
-          );
-        } else {
-          return widget.startScreen;
-        }
-      },
-    ),
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
