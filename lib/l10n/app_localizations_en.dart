@@ -332,4 +332,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get audio96 => '96 kbps (Low)';
+
+  @override
+  String get favorites => 'Favorites';
 }

@@ -715,6 +715,12 @@ abstract class AppLocalizations {
   /// In pl, this message translates to:
   /// **'96 kbps (Niska)'**
   String get audio96;
+
+  /// No description provided for @favorites.
+  ///
+  /// In pl, this message translates to:
+  /// **'Ulubione'**
+  String get favorites;
 }
 
 class _AppLocalizationsDelegate

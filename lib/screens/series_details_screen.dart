@@ -4,7 +4,7 @@ import '../models/episode.dart';
 import '../services/jellyfin_api.dart';
 import '../services/download_service.dart';
 import '../widgets/episode_card.dart';
-import 'player_screen.dart';
+import 'player/player_screen.dart';
 import 'details_screen.dart';
 import '../models/jellyfin_item.dart';
 import '../widgets/ad_banner_widget.dart';

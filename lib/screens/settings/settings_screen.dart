@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import '../services/storage_service.dart';
-import '../widgets/ad_banner_widget.dart';
+import '../../services/storage_service.dart';
+import '../../widgets/ad_banner_widget.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import '../l10n/app_localizations.dart';
+import '../../l10n/app_localizations.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import '../main.dart';
-import 'settings/admin_web_view_screen.dart';
+import '../../main.dart';
+import 'admin_web_view_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
 

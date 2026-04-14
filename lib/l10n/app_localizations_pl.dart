@@ -334,4 +334,7 @@ class AppLocalizationsPl extends AppLocalizations {
 
   @override
   String get audio96 => '96 kbps (Niska)';
+
+  @override
+  String get favorites => 'Ulubione';
 }

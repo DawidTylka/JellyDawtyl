@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import '../l10n/app_localizations.dart';
-import 'player_screen.dart';
+import 'player/player_screen.dart';
 import '../services/download_service.dart';
 import '../widgets/ad_banner_widget.dart';
+import '../widgets/responsive_grid_layout.dart';
+import '../widgets/media_grid_card.dart';
 
 class DownloadsScreen extends StatefulWidget {
   const DownloadsScreen({super.key});
@@ -293,103 +295,29 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   }
 
   Widget _buildFolderGrid() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final crossAxisCount = width >= 1300
-            ? 5
-            : width >= 1000
-            ? 4
-            : width >= 700
-            ? 3
-            : 2;
-        final childAspectRatio = width >= 1000 ? 0.82 : 0.7;
+    return ResponsiveGridLayout(
+      itemCount: _items.length,
+      itemBuilder: (context, index) {
+        final folder = _items[index] as Directory;
+        final folderName = folder.path.split(Platform.pathSeparator).last;
+        final coverFile = File('${folder.path}/folder.jpg');
+        final isSelected = _selectedIndices.contains(index);
 
-        return GridView.builder(
-          padding: const EdgeInsets.all(16),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            childAspectRatio: childAspectRatio,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-          ),
-          itemCount: _items.length,
-          itemBuilder: (context, index) {
-            final folder = _items[index] as Directory;
-            final folderName = folder.path.split(Platform.pathSeparator).last;
-            final coverFile = File('${folder.path}/folder.jpg');
-            final isSelected = _selectedIndices.contains(index);
-
-            return MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-                onTap: () {
-                  if (_isSelectionMode) {
-                    _toggleSelection(index);
-                  } else {
-                    setState(() => _currentFolder = folder);
-                    _loadData();
-                  }
-                },
-                onLongPress: () => _toggleSelection(index),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Stack(
-                        children: [
-                          Container(
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              color: Colors.grey[900],
-                              borderRadius: BorderRadius.circular(12),
-                              image: coverFile.existsSync()
-                                  ? DecorationImage(
-                                      image: FileImage(coverFile),
-                                      fit: BoxFit.cover,
-                                    )
-                                  : null,
-                            ),
-                            child: !coverFile.existsSync()
-                                ? const Icon(
-                                    Icons.movie_filter,
-                                    size: 50,
-                                    color: Colors.white10,
-                                  )
-                                : null,
-                          ),
-                          if (isSelected)
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.deepPurple.withValues(alpha: 0.6),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Center(
-                                child: Icon(
-                                  Icons.check_circle,
-                                  color: Colors.white,
-                                  size: 40,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      folderName,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-            );
+        return MediaGridCard(
+          title: folderName,
+          // Używamy FileImage do ładowania z pamięci telefonu
+          imageProvider: coverFile.existsSync() ? FileImage(coverFile) : null,
+          fallbackIcon: Icons.folder_copy_outlined, // Ikona gdy nie ma okładki
+          isSelected: isSelected,
+          onTap: () {
+            if (_isSelectionMode) {
+              _toggleSelection(index);
+            } else {
+              setState(() => _currentFolder = folder);
+              _loadData();
+            }
           },
+          onLongPress: () => _toggleSelection(index),
         );
       },
     );

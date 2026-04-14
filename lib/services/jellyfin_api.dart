@@ -280,6 +280,7 @@ class JellyfinApi {
         queryParameters: {
           "UserId": userId,
           "Fields": "PrimaryImageAspectRatio,Overview,Type",
+          "enableResumable": false,
         },
         options: Options(headers: {"X-Emby-Token": token}),
       );
@@ -288,6 +289,34 @@ class JellyfinApi {
       return data.map((m) => Movie.fromJson(m)).toList();
     } catch (e) {
       debugPrint("Błąd NextUp: $e");
+      return [];
+    }
+  }
+
+  Future<List<Movie>> fetchFavorites(
+    String url,
+    String token,
+    String userId,
+  ) async {
+    String fullUrl = url.startsWith('http') ? url : 'https://$url';
+    try {
+      final response = await _dio.get(
+        "$fullUrl/Users/$userId/Items",
+        queryParameters: {
+          "Recursive": true,
+          "Filters": "IsFavorite", // Magiczny filtr API Jellyfina!
+          "IncludeItemTypes": "Movie,Series",
+          "Fields": "PrimaryImageAspectRatio,Overview,Type",
+          "SortBy": "SortName",
+          "SortOrder": "Ascending",
+        },
+        options: Options(headers: {"X-Emby-Token": token}),
+      );
+
+      final List data = response.data['Items'] ?? [];
+      return data.map((m) => Movie.fromJson(m)).toList();
+    } catch (e) {
+      debugPrint("Błąd pobierania ulubionych: $e");
       return [];
     }
   }

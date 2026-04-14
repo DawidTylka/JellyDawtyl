@@ -6,9 +6,10 @@ import '../models/library.dart';
 import '../services/jellyfin_api.dart';
 import 'home_screen.dart';
 import 'downloads_screen.dart';
-import 'settings_screen.dart';
+import 'settings/settings_screen.dart';
 import '../widgets/ad_banner_widget.dart';
 import '../widgets/jellyfin_section.dart';
+import 'favorites_screen.dart';
 
 class LibrarySelectorScreen extends StatefulWidget {
   final List<Library> libraries;
@@ -207,7 +208,26 @@ class _LibrarySelectorScreenState extends State<LibrarySelectorScreen> {
         actions: [
           IconButton(
             icon: const Icon(
-              Icons.download_done_rounded,
+              Icons.favorite_outline,
+              color: Colors.redAccent,
+            ),
+            tooltip: l10n.offlineFiles,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => FavoriteScreen(
+                    baseUrl: widget.baseUrl,
+                    token: widget.token,
+                    userId: widget.userId,
+                  ),
+                ),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(
+              Icons.folder_copy_outlined,
               color: Colors.greenAccent,
             ),
             tooltip: l10n.offlineFiles,

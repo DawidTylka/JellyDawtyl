@@ -117,5 +117,6 @@
   "audio320": "320 kbps (Wysoka)",
   "audio192": "192 kbps (Dobra)",
   "audio128": "128 kbps (Standard)",
-  "audio96": "96 kbps (Niska)"
+  "audio96": "96 kbps (Niska)",
+  "favorites": "Ulubione"
 }

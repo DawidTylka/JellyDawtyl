@@ -3,7 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../l10n/app_localizations.dart';
 import '../models/jellyfin_item.dart';
 import '../services/download_service.dart';
-import 'player_screen.dart';
+import 'player/player_screen.dart';
 import 'package:dio/dio.dart';
 import '../services/jellyfin_api.dart';
 import '../widgets/ad_banner_widget.dart';

@@ -30,6 +30,7 @@
         </receiver>
         <activity
             android:name="com.dawtyl.jellydawtyl.MainActivity"
+            android:supportsPictureInPicture="true"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""
