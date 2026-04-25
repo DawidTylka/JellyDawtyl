@@ -130,16 +130,20 @@ class PlayerViewModel extends ChangeNotifier {
     });
 
     player.stream.duration.listen((duration) async {
-      if (duration.inSeconds > 0) {
-        if (!_firstLoadDone) {
-          _firstLoadDone = true;
+      if (duration.inSeconds > 0 && !_firstLoadDone) {
+        _firstLoadDone = true;
+        
+        // Daj odtwarzaczowi "odetchnąć" po otwarciu strumienia
+        await Future.delayed(const Duration(milliseconds: 200)); 
+        
+        if (!_isDisposed) {
           _applyInitialTracks();
-        } else if (_pendingSeek != null) {
-          final targetTime = _pendingSeek!;
-          _pendingSeek = null;
-          await player.seek(targetTime);
-          await Future.delayed(const Duration(milliseconds: 300));
-          _applyInitialTracks();
+          
+          // Jeśli mimo StartTimeTicks w URL, pozycja jest zła, 
+          // wymuś seek DOPIERO TUTAJ, po ustawieniu tracków.
+          if (startPositionMs != null && !isOffline) {
+            player.seek(Duration(milliseconds: startPositionMs!));
+          }
         }
       }
     });
@@ -163,15 +167,11 @@ class PlayerViewModel extends ChangeNotifier {
           isLoading = false;
           notifyListeners();
         }
-
-        if (!_hasPerformedInitialSeek && startPositionMs != null && startPositionMs! > 0) {
-          _hasPerformedInitialSeek = true;
-          await player.pause();
-          await Future.delayed(const Duration(milliseconds: 400));
-          await player.seek(Duration(milliseconds: startPositionMs!));
-          await Future.delayed(const Duration(milliseconds: 100));
-          await player.play();
-        }
+        // if (!_hasPerformedInitialSeek && startPositionMs != null && startPositionMs! > 0) {
+        //   _hasPerformedInitialSeek = true;
+        //   await Future.delayed(const Duration(milliseconds: 1000));
+        //   await player.seek(Duration(milliseconds: startPositionMs!));
+        // }
       }
     });
   }

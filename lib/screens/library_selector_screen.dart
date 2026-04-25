@@ -113,10 +113,6 @@ class _LibrarySelectorScreenState extends State<LibrarySelectorScreen> {
         widget.userId,
         lib.id,
       );
-      setState(() {
-        _resumeItems = resume;
-        _isLoadingResume = false;
-      });
       if (!context.mounted) return;
       Navigator.pop(context);
 
