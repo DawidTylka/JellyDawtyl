@@ -279,6 +279,7 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
                 final bool expandedByDefault =
                     groupedEpisodes.keys.first == entry.key;
                 return ExpansionTile(
+                  key: PageStorageKey<int>(entry.key),
                   initiallyExpanded: expandedByDefault,
                   collapsedBackgroundColor: Colors.white12,
                   backgroundColor: Colors.white10,
