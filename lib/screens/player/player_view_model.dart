@@ -139,12 +139,27 @@ class PlayerViewModel extends ChangeNotifier {
         if (!_isDisposed) {
           _applyInitialTracks();
           
-          // Jeśli mimo StartTimeTicks w URL, pozycja jest zła, 
-          // wymuś seek DOPIERO TUTAJ, po ustawieniu tracków.
-          if (startPositionMs != null && !isOffline) {
-            player.seek(Duration(milliseconds: startPositionMs!));
+          // Seek do startPositionMs TYLKO RAZ (gwarantowana flaga)
+          if (!_hasPerformedInitialSeek && startPositionMs != null && startPositionMs! > 0) {
+            _hasPerformedInitialSeek = true;
+            // Pause -> delay -> seek -> delay -> play dla stabilności
+            await player.pause();
+            await Future.delayed(const Duration(milliseconds: 100));
+            await player.seek(Duration(milliseconds: startPositionMs!));
+            await Future.delayed(const Duration(milliseconds: 100));
+            await player.play();
           }
         }
+      } else if (_pendingSeek != null && _firstLoadDone) {
+        // Zmiana jakości - seek na zapisaną pozycję
+        final targetTime = _pendingSeek!;
+        _pendingSeek = null;
+        await player.pause();
+        await Future.delayed(const Duration(milliseconds: 100));
+        await player.seek(targetTime);
+        await Future.delayed(const Duration(milliseconds: 300));
+        _applyInitialTracks();
+        await player.play();
       }
     });
 
@@ -156,7 +171,12 @@ class PlayerViewModel extends ChangeNotifier {
 
     player.stream.error.listen((event) {
       if (!_isDisposed) {
-        _setError("Wystąpił błąd odtwarzania.");
+        // Ignoruj błędy TCP - to przejściowe błędy połączeń
+        if (!event.toString().contains('tcp:') && 
+            !event.toString().contains('ffurl_read') &&
+            !isLoading) {
+          _setError("Wystapił błąd odtwarzania.");
+        }
         debugPrint("Player Error: $event");
       }
     });
@@ -167,11 +187,6 @@ class PlayerViewModel extends ChangeNotifier {
           isLoading = false;
           notifyListeners();
         }
-        // if (!_hasPerformedInitialSeek && startPositionMs != null && startPositionMs! > 0) {
-        //   _hasPerformedInitialSeek = true;
-        //   await Future.delayed(const Duration(milliseconds: 1000));
-        //   await player.seek(Duration(milliseconds: startPositionMs!));
-        // }
       }
     });
   }
@@ -192,6 +207,7 @@ class PlayerViewModel extends ChangeNotifier {
     selectedWidth = width;
     selectedBitrate = bitrate;
     isLoading = true;
+    _firstLoadDone = false; // Reset, aby duration listener obsłużył _pendingSeek
     notifyListeners();
 
     final newUrl = _buildCompatibleUrl(originalUrl);
@@ -302,7 +318,10 @@ class PlayerViewModel extends ChangeNotifier {
     final query = Map<String, String>.from(uri.queryParameters);
     if (token != null) query['api_key'] = token!;
     query['Static'] = 'true';
-    query.removeWhere((key, value) => ['MaxWidth', 'VideoBitrate', 'VideoCodec', 'AudioCodec', 'MaxFramerate', 'AudioBitrate', 'MaxAudioChannels'].contains(key));
+    // Usuwamy ALL problematyczne parametry które mogą kolidować z seekiem
+    query.removeWhere((key, value) => 
+      ['MaxWidth', 'VideoBitrate', 'VideoCodec', 'AudioCodec', 'MaxFramerate', 
+       'AudioBitrate', 'MaxAudioChannels', 'StartTimeTicks', 'StartTime'].contains(key));
     
     return uri.replace(queryParameters: query).toString();
   }

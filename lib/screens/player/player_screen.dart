@@ -127,7 +127,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
                 // --- 3. NAKŁADKA BŁĘDU ---
                 // (Ostrzeżenie z przyciskiem z Twojego pliku status_overlays.dart)
-                if (_viewModel.error != null)
+                if (_viewModel.error != null && !_viewModel.isLoading)
                   PlayerErrorView(
                     error: _viewModel.error!,
                     onClose: () => Navigator.pop(context),
