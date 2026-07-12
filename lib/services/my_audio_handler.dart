@@ -45,7 +45,7 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
               playing ? MediaControl.pause : MediaControl.play,
               MediaControl.fastForward,
             ],
-            systemActions: {MediaAction.seek},
+            systemActions: {MediaAction.seek}
           ),
         );
       });

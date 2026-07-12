@@ -20,6 +20,14 @@ class PlayerVideoDisplay extends StatelessWidget {
   MaterialVideoControlsThemeData _buildControlsTheme() {
     return MaterialVideoControlsThemeData(
       topButtonBarMargin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      seekBarMargin: const EdgeInsets.only(left: 16, right: 16, bottom: 52.0),
+      seekBarHeight: 4.0,          // grubsza linia
+      seekBarContainerHeight: 40.0, // większy obszar dotyku
+      seekBarThumbSize: 16.0,      // większy uchwyt
+      seekBarColor: Colors.white,
+      seekBarBufferColor: Colors.greenAccent,
+      seekBarPositionColor: Colors.deepPurple,
+      seekBarThumbColor: Colors.deepPurple,
       topButtonBar: [
         const BackButton(color: Colors.white),
         const SizedBox(width: 8),
@@ -75,6 +83,13 @@ class PlayerVideoDisplay extends StatelessWidget {
                 controller: viewModel.controller,
                 controls: MaterialVideoControls,
                 fit: BoxFit.contain,
+                subtitleViewConfiguration: SubtitleViewConfiguration(
+                  style: TextStyle(
+                    fontSize: 50.0,
+                    color: Colors.white,
+                    backgroundColor: Colors.black54,
+                  ),
+                ),
               ),
             ),
             Row(
