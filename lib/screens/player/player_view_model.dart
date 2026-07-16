@@ -11,6 +11,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 // Upewnij się, że te ścieżki pasują do struktury Twojego projektu:
 import '../../../services/jellyfin_api.dart';
 import '../../../services/storage_service.dart';
+import '../../../services/my_audio_handler.dart';
 import '../../../main.dart'; // Tu znajduje się globalny audioHandler
 
 class PlayerViewModel extends ChangeNotifier {
@@ -41,6 +42,7 @@ class PlayerViewModel extends ChangeNotifier {
   int? selectedBitrate;
   int? selectedAudioIndex;
   int? selectedSubtitleIndex;
+  bool _isChangingEpisode = false;
 
   List<dynamic> jellyfinAudioStreams = [];
   List<dynamic> jellyfinSubtitleStreams = [];
@@ -92,6 +94,18 @@ class PlayerViewModel extends ChangeNotifier {
         MediaItem(id: itemId, title: title, album: 'JellyDawtyl'),
       );
 
+      if (audioHandler is MyAudioHandler) {
+        final handler = audioHandler as MyAudioHandler;
+        
+        handler.onSkipToNextLocal = () {
+          if (hasNextEpisode) skipToNext();
+        };
+        
+        handler.onSkipToPreviousLocal = () {
+          if (hasPreviousEpisode) skipToPrevious();
+        };
+      }
+
       await _fetchJellyfinStreamData();
 
       // Od razu ładujemy listę odcinków serialu (potrzebne do przycisków nawigacji)
@@ -125,6 +139,12 @@ class PlayerViewModel extends ChangeNotifier {
     } catch (e) {
       _setError("Wystąpił błąd inicjalizacji odtwarzacza.");
       debugPrint("Initialize Error: $e");
+    }
+  }
+
+  void _updateAudioHandlerEpisodeStatus() {
+    if (audioHandler is MyAudioHandler) {
+      (audioHandler as MyAudioHandler).updateEpisodeStatus(hasPreviousEpisode, hasNextEpisode);
     }
   }
 
@@ -263,8 +283,8 @@ class PlayerViewModel extends ChangeNotifier {
   Future<void> _fetchJellyfinStreamData() async {
     if (isOffline || baseUrl == null || token == null) return;
     
+    final httpClient = HttpClient()..badCertificateCallback = ((cert, host, port) => true);
     try {
-      final httpClient = HttpClient()..badCertificateCallback = ((cert, host, port) => true);
       final url = '$baseUrl/Users/$userId/Items/$itemId?api_key=$token';
       final request = await httpClient.getUrl(Uri.parse(url));
       final response = await request.close();
@@ -298,6 +318,8 @@ class PlayerViewModel extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint("Błąd pobierania strumieni: $e");
+    } finally {
+      httpClient.close();
     }
   }
 
@@ -342,8 +364,8 @@ class PlayerViewModel extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    final httpClient = HttpClient()..badCertificateCallback = ((cert, host, port) => true);
     try {
-      final httpClient = HttpClient()..badCertificateCallback = ((cert, host, port) => true);
       final subUrl = '$baseUrl/Videos/$itemId/$itemId/Subtitles/$selectedSubtitleIndex/0/Stream.srt?api_key=$token';
       final request = await httpClient.getUrl(Uri.parse(subUrl));
       final response = await request.close();
@@ -359,6 +381,8 @@ class PlayerViewModel extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint("Błąd pobierania napisów: $e");
+    } finally {
+      httpClient.close();
     }
   }
 
@@ -441,31 +465,24 @@ class PlayerViewModel extends ChangeNotifier {
   /// Publiczna metoda: pomiń do następnego odcinka
   Future<void> skipToNext() async {
     if (!hasNextEpisode) return;
+    _isChangingEpisode = true; // Zabezpieczenie panelu PiP!
     final nextItem = _episodeItems![_currentEpisodeIndex + 1];
     final nextUrl = isOffline
         ? (_resolveOfflineUrlForEpisode(nextItem) ?? '')
         : '$baseUrl/Videos/${nextItem['Id']}/stream.mp4';
-    onPlayNext?.call(
-      nextUrl,
-      nextItem['Name'] ?? 'Odcinek',
-      nextItem['Id'] ?? '',
-      isOffline,
-    );
+    onPlayNext?.call(nextUrl, nextItem['Name'] ?? 'Odcinek', nextItem['Id'] ?? '', isOffline);
   }
+
 
   /// Publiczna metoda: pomiń do poprzedniego odcinka
   Future<void> skipToPrevious() async {
     if (!hasPreviousEpisode) return;
+    _isChangingEpisode = true; // Zabezpieczenie panelu PiP!
     final prevItem = _episodeItems![_currentEpisodeIndex - 1];
     final prevUrl = isOffline
         ? (_resolveOfflineUrlForEpisode(prevItem) ?? '')
         : '$baseUrl/Videos/${prevItem['Id']}/stream.mp4';
-    onPlayPrevious?.call(
-      prevUrl,
-      prevItem['Name'] ?? 'Odcinek',
-      prevItem['Id'] ?? '',
-      isOffline,
-    );
+    onPlayPrevious?.call(prevUrl, prevItem['Name'] ?? 'Odcinek', prevItem['Id'] ?? '', isOffline);
   }
 
   /// W trybie offline: skanuje katalog z plikami i buduje listę odcinków
@@ -517,6 +534,7 @@ class PlayerViewModel extends ChangeNotifier {
 
       _episodesLoaded = true;
       notifyListeners();
+      _updateAudioHandlerEpisodeStatus();
       debugPrint("Offline episodes loaded: ${_episodeItems!.length}, current index: $_currentEpisodeIndex");
     } catch (e) {
       debugPrint("Błąd ładowania offline odcinków: $e");
@@ -580,12 +598,12 @@ class PlayerViewModel extends ChangeNotifier {
   Future<void> _ensureEpisodesLoaded() async {
     if (_episodesLoaded) return;
     if (itemData == null || itemData!['Type'] != 'Episode') return;
+    final httpClient = HttpClient()..badCertificateCallback = ((cert, host, port) => true);
     try {
       final seriesId = itemData!['SeriesId'];
       final seasonId = itemData!['SeasonId'];
       if (seriesId == null) return;
 
-      final httpClient = HttpClient()..badCertificateCallback = ((cert, host, port) => true);
       final url = '$baseUrl/Shows/$seriesId/Episodes?seasonId=$seasonId&UserId=$userId&api_key=$token';
       final request = await httpClient.getUrl(Uri.parse(url));
       final response = await request.close();
@@ -597,10 +615,13 @@ class PlayerViewModel extends ChangeNotifier {
           _currentEpisodeIndex = _episodeItems!.indexWhere((item) => item['Id'] == itemId);
           _episodesLoaded = true;
           notifyListeners();
+          _updateAudioHandlerEpisodeStatus();
         }
       }
     } catch (e) {
       debugPrint("Błąd ładowania listy odcinków: $e");
+    } finally {
+      httpClient.close();
     }
   }
 
@@ -641,6 +662,7 @@ class PlayerViewModel extends ChangeNotifier {
   // DISPOSE
   // ==========================================
   @override
+  @override
   void dispose() {
     _isDisposed = true;
     _progressTimer?.cancel();
@@ -658,7 +680,13 @@ class PlayerViewModel extends ChangeNotifier {
     }
 
     audioHandler.detachPlayer();
-    audioHandler.stop();
+    
+    // UBIJAMY sesję tylko wtedy, gdy UŻYTKOWNIK WYCHODZI Z ODTWARZACZA
+    // Nie ubijamy, jeśli po prostu zmienił odcinek
+    if (!_isChangingEpisode) {
+      audioHandler.stop();
+    }
+    
     player.dispose();
     WakelockPlus.disable();
     super.dispose();

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-// --- IMPORTY TWOICH NOWYCH MODUŁÓW ---
-// Upewnij się, że ścieżki (foldery) się zgadzają z Twoją strukturą projektu
 import 'player_view_model.dart';
 import 'widgets/video_display.dart';
 import 'widgets/settings_bottom_sheet.dart';
@@ -124,40 +122,37 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        // ListenableBuilder nasłuchuje zmian z ViewModelu i odświeża interfejs (np. błędy, ładowanie)
-        child: ListenableBuilder(
-          listenable: _viewModel,
-          builder: (context, _) {
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                
-                // --- 1. ODTWARZACZ WIDEO, PASEK GÓRNY I GESTY ---
-                // (Wszystko z Twojego pliku video_display.dart)
-                PlayerVideoDisplay(
-                  viewModel: _viewModel,
-                  title: widget.title,
-                  onSettingsPressed: _showSettingsMenu,
+      body: ListenableBuilder(
+        listenable: _viewModel,
+        builder: (context, _) {
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              
+              // --- 1. ODTWARZACZ WIDEO, PASEK GÓRNY I GESTY ---
+              // (Wszystko z Twojego pliku video_display.dart)
+              PlayerVideoDisplay(
+                viewModel: _viewModel,
+                title: widget.title,
+                onSettingsPressed: _showSettingsMenu,
+              ),
+
+              // --- 2. NAKŁADKA ŁADOWANIA ---
+              // (Animowane logo SVG z Twojego pliku status_overlays.dart)
+              if (_viewModel.isLoading && _viewModel.error == null)
+                const PlayerLoadingView(),
+
+              // --- 3. NAKŁADKA BŁĘDU ---
+              // (Ostrzeżenie z przyciskiem z Twojego pliku status_overlays.dart)
+              if (_viewModel.error != null && !_viewModel.isLoading)
+                PlayerErrorView(
+                  error: _viewModel.error!,
+                  onClose: () => Navigator.pop(context),
                 ),
-
-                // --- 2. NAKŁADKA ŁADOWANIA ---
-                // (Animowane logo SVG z Twojego pliku status_overlays.dart)
-                if (_viewModel.isLoading && _viewModel.error == null)
-                  const PlayerLoadingView(),
-
-                // --- 3. NAKŁADKA BŁĘDU ---
-                // (Ostrzeżenie z przyciskiem z Twojego pliku status_overlays.dart)
-                if (_viewModel.error != null && !_viewModel.isLoading)
-                  PlayerErrorView(
-                    error: _viewModel.error!,
-                    onClose: () => Navigator.pop(context),
-                  ),
-                  
-              ],
-            );
-          },
-        ),
+                
+            ],
+          );
+        },
       ),
     );
   }

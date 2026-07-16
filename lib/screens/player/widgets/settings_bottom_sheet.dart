@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
-import '../../../../l10n/app_localizations.dart'; // Upewnij się, że ścieżka się zgadza
-import '../player_view_model.dart'; // Upewnij się, że ścieżka się zgadza
+import '../../../../l10n/app_localizations.dart';
+import '../player_view_model.dart';
 import 'dart:io';
 
 class PlayerSettingsSheet extends StatelessWidget {

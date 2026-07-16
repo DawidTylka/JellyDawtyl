@@ -88,63 +88,90 @@ class PlayerVideoDisplay extends StatelessWidget {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
-    // PipWidget automatycznie wykrywa stan systemu
     return PipWidget(
       // 1. WIDOK W MAŁYM OKIENKU (PiP)
       pipBuilder: (context) {
         return Video(
           controller: viewModel.controller,
-          controls: NoVideoControls, // Wyłączamy wszystkie przyciski w PiP!
+          controls: NoVideoControls,
           fit: BoxFit.contain,
+          subtitleViewConfiguration: const SubtitleViewConfiguration(
+            visible: false, 
+            padding: EdgeInsets.zero,
+          ),
         );
       },
       
       // 2. WIDOK NORMALNY (Pełny ekran)
       builder: (context) {
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            MaterialVideoControlsTheme(
-              normal: _buildControlsTheme(),
-              fullscreen: _buildControlsTheme(),
-              child: Video(
+        // LayoutBuilder pozwala nam reagować na drastyczne zmiany rozmiaru okna w czasie rzeczywistym
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            
+            // MAGICZNY WARUNEK: Jeśli wysokość okna spada poniżej 250px 
+            // (np. podczas animacji minimalizowania do PiP), natychmiast wywalamy 
+            // cały interfejs z przyciskami. Dzięki temu Flutter nie ma na czym 
+            // wywalić błędu "bottom overflowed".
+            if (constraints.maxHeight < 250 || constraints.maxWidth < 250) {
+              return Video(
                 controller: viewModel.controller,
-                controls: MaterialVideoControls,
+                controls: NoVideoControls,
                 fit: BoxFit.contain,
-                subtitleViewConfiguration: SubtitleViewConfiguration(
-                  style: TextStyle(
-                    fontSize: 50.0,
-                    color: Colors.white,
-                    backgroundColor: Colors.black54,
-                  ),
+                subtitleViewConfiguration: const SubtitleViewConfiguration(
+                  visible: false, 
+                  padding: EdgeInsets.zero,
                 ),
-              ),
-            ),
-            Row(
+              );
+            }
+
+            // Normalny widok z kontrolkami (gdy ekran jest odpowiednio duży)
+            return Stack(
+              fit: StackFit.expand,
               children: [
-                Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onDoubleTap: () {
-                      final target = viewModel.player.state.position - const Duration(seconds: 10);
-                      viewModel.player.seek(target < Duration.zero ? Duration.zero : target);
-                    },
+                MaterialVideoControlsTheme(
+                  normal: _buildControlsTheme(),
+                  fullscreen: _buildControlsTheme(),
+                  child: Video(
+                    controller: viewModel.controller,
+                    controls: MaterialVideoControls,
+                    fit: BoxFit.contain,
+                    subtitleViewConfiguration: const SubtitleViewConfiguration(
+                      style: TextStyle(
+                        fontSize: 50.0,
+                        color: Colors.white,
+                        backgroundColor: Colors.black54,
+                      ),
+                    ),
                   ),
                 ),
-                Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onDoubleTap: () {
-                      final target = viewModel.player.state.position + const Duration(seconds: 10);
-                      final total = viewModel.player.state.duration;
-                      viewModel.player.seek(target > total ? total : target);
-                    },
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onDoubleTap: () {
+                          final target = viewModel.player.state.position - const Duration(seconds: 10);
+                          viewModel.player.seek(target < Duration.zero ? Duration.zero : target);
+                        },
+                      ),
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onDoubleTap: () {
+                          final target = viewModel.player.state.position + const Duration(seconds: 10);
+                          final total = viewModel.player.state.duration;
+                          viewModel.player.seek(target > total ? total : target);
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ],
-            ),
-          ],
+            );
+          },
         );
       },
     );
