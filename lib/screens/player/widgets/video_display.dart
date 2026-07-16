@@ -44,6 +44,35 @@ class PlayerVideoDisplay extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ),
+        // ListenableBuilder odświeża tylko przyciski, reszta paska pozostaje nietknięta
+        ListenableBuilder(
+          listenable: viewModel,
+          builder: (context, _) {
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: Icon(
+                    Icons.skip_previous,
+                    color: viewModel.hasPreviousEpisode ? Colors.white : Colors.white38,
+                    size: 28,
+                  ),
+                  tooltip: 'Poprzedni odcinek',
+                  onPressed: viewModel.hasPreviousEpisode ? () => viewModel.skipToPrevious() : null,
+                ),
+                IconButton(
+                  icon: Icon(
+                    Icons.skip_next,
+                    color: viewModel.hasNextEpisode ? Colors.white : Colors.white38,
+                    size: 28,
+                  ),
+                  tooltip: 'Następny odcinek',
+                  onPressed: viewModel.hasNextEpisode ? () => viewModel.skipToNext() : null,
+                ),
+              ],
+            );
+          },
+        ),
         IconButton(
           icon: const Icon(Icons.picture_in_picture_alt, color: Colors.white, size: 28),
           onPressed: () {

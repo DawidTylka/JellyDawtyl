@@ -54,6 +54,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       
       // Callback, który wywoła się, gdy ViewModel wykryje, że trzeba włączyć kolejny odcinek
       onPlayNext: _handlePlayNext,
+      onPlayPrevious: _handlePlayPrevious,
     );
     
     // Odpalamy całą logikę startową (Wakelock, API, Player, Subtitles)
@@ -71,6 +72,26 @@ class _PlayerScreenState extends State<PlayerScreen> {
           url: nextUrl,
           title: nextTitle,
           itemId: nextItemId,
+          baseUrl: widget.baseUrl,
+          token: widget.token,
+          userId: widget.userId,
+          isOffline: isOffline,
+        ),
+      ),
+    );
+  }
+
+  // Funkcja odpowiedzialna za płynne przejście do poprzedniego odcinka
+  void _handlePlayPrevious(String prevUrl, String prevTitle, String prevItemId, bool isOffline) {
+    if (!mounted) return;
+    
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PlayerScreen(
+          url: prevUrl,
+          title: prevTitle,
+          itemId: prevItemId,
           baseUrl: widget.baseUrl,
           token: widget.token,
           userId: widget.userId,

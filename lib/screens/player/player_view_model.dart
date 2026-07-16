@@ -24,8 +24,9 @@ class PlayerViewModel extends ChangeNotifier {
   final bool isOffline;
   final int? startPositionMs;
 
-  // Callback nawigacji (wywoływany, gdy trzeba odtworzyć następny odcinek)
+  // Callback nawigacji (wywoływany, gdy trzeba odtworzyć następny/poprzedni odcinek)
   final void Function(String url, String title, String itemId, bool isOffline)? onPlayNext;
+  final void Function(String url, String title, String itemId, bool isOffline)? onPlayPrevious;
 
   // === Komponenty Odtwarzacza ===
   late final Player player;
@@ -65,6 +66,7 @@ class PlayerViewModel extends ChangeNotifier {
     this.isOffline = false,
     this.startPositionMs,
     this.onPlayNext,
+    this.onPlayPrevious,
   }) {
     player = Player(
       configuration: const PlayerConfiguration(
@@ -91,6 +93,13 @@ class PlayerViewModel extends ChangeNotifier {
       );
 
       await _fetchJellyfinStreamData();
+
+      // Od razu ładujemy listę odcinków serialu (potrzebne do przycisków nawigacji)
+      if (isOffline) {
+        _loadOfflineEpisodes();
+      } else {
+        await _ensureEpisodesLoaded();
+      }
 
       if (isOffline) {
         await player.setRate(1.0);
@@ -421,6 +430,104 @@ class PlayerViewModel extends ChangeNotifier {
     });
   }
 
+  // === Widoczność przycisków pomijania odcinków ===
+  bool _episodesLoaded = false;
+  List<dynamic>? _episodeItems;
+  int _currentEpisodeIndex = -1;
+
+  bool get hasNextEpisode => _episodesLoaded && _currentEpisodeIndex >= 0 && _currentEpisodeIndex + 1 < (_episodeItems?.length ?? 0);
+  bool get hasPreviousEpisode => _episodesLoaded && _currentEpisodeIndex > 0;
+
+  /// Publiczna metoda: pomiń do następnego odcinka
+  Future<void> skipToNext() async {
+    if (!hasNextEpisode) return;
+    final nextItem = _episodeItems![_currentEpisodeIndex + 1];
+    final nextUrl = isOffline
+        ? (_resolveOfflineUrlForEpisode(nextItem) ?? '')
+        : '$baseUrl/Videos/${nextItem['Id']}/stream.mp4';
+    onPlayNext?.call(
+      nextUrl,
+      nextItem['Name'] ?? 'Odcinek',
+      nextItem['Id'] ?? '',
+      isOffline,
+    );
+  }
+
+  /// Publiczna metoda: pomiń do poprzedniego odcinka
+  Future<void> skipToPrevious() async {
+    if (!hasPreviousEpisode) return;
+    final prevItem = _episodeItems![_currentEpisodeIndex - 1];
+    final prevUrl = isOffline
+        ? (_resolveOfflineUrlForEpisode(prevItem) ?? '')
+        : '$baseUrl/Videos/${prevItem['Id']}/stream.mp4';
+    onPlayPrevious?.call(
+      prevUrl,
+      prevItem['Name'] ?? 'Odcinek',
+      prevItem['Id'] ?? '',
+      isOffline,
+    );
+  }
+
+  /// W trybie offline: skanuje katalog z plikami i buduje listę odcinków
+  void _loadOfflineEpisodes() {
+    try {
+      final file = File(originalUrl);
+      final dir = file.parent;
+      // Case-insensitive: .mp4, .MP4, .mkv, .MKV, .avi, .m4v itp.
+      final videoFiles = dir.listSync().whereType<File>().where((f) {
+        final lower = f.path.toLowerCase();
+        return lower.endsWith('.mp4') || lower.endsWith('.mkv') || lower.endsWith('.m4v') || lower.endsWith('.avi');
+      }).toList();
+
+      if (videoFiles.isEmpty) {
+        debugPrint("_loadOfflineEpisodes: brak plików w ${dir.path}");
+        return;
+      }
+
+      // Sortujemy pliki aby indeksy były w dobrej kolejności
+      videoFiles.sort((a, b) => a.path.toLowerCase().compareTo(b.path.toLowerCase()));
+
+      // Budujemy listę odcinków — każdy plik w folderze to "odcinek"
+      _episodeItems = [];
+      final currentFileName = file.path.split(Platform.pathSeparator).last;
+
+      for (int i = 0; i < videoFiles.length; i++) {
+        final f = videoFiles[i];
+        final fName = f.path.split(Platform.pathSeparator).last;
+
+        // Próbujemy wyciągnąć numery z nazwy (opcjonalnie)
+        final match = RegExp(r'_S(\d+)E(\d+)_').firstMatch(fName);
+        final epNum = match != null ? int.parse(match.group(2)!) : (i + 1);
+        final seasonNum = match != null ? int.parse(match.group(1)!) : 1;
+
+        final title = fName.replaceAll(RegExp(r'\.(mp4|mkv|m4v|avi)$', caseSensitive: false), '').replaceAll('_', ' ');
+        _episodeItems!.add({
+          'Id': '',
+          'Name': title,
+          'IndexNumber': epNum,
+          'ParentIndexNumber': seasonNum,
+          'Path': f.path,
+        });
+
+        // Zapamiętujemy indeks bieżącego pliku
+        if (fName == currentFileName) {
+          _currentEpisodeIndex = i;
+        }
+      }
+
+      _episodesLoaded = true;
+      notifyListeners();
+      debugPrint("Offline episodes loaded: ${_episodeItems!.length}, current index: $_currentEpisodeIndex");
+    } catch (e) {
+      debugPrint("Błąd ładowania offline odcinków: $e");
+    }
+  }
+
+  String? _resolveOfflineUrlForEpisode(Map<String, dynamic> episodeItem) {
+    // W trybie offline zwracamy ścieżkę zapisaną w _loadOfflineEpisodes
+    return episodeItem['Path'] as String?;
+  }
+
   Future<void> _handlePlaybackCompleted() async {
     final autoPlay = await StorageService().getSetting('setting_autoplay', defaultValue: true);
     if (!autoPlay || onPlayNext == null) return;
@@ -463,6 +570,15 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   Future<void> _playNextOnline() async {
+    await _ensureEpisodesLoaded();
+    if (hasNextEpisode) {
+      await skipToNext();
+    }
+  }
+
+  /// Ładuje listę odcinków serialu i znajduje indeks bieżącego
+  Future<void> _ensureEpisodesLoaded() async {
+    if (_episodesLoaded) return;
     if (itemData == null || itemData!['Type'] != 'Episode') return;
     try {
       final seriesId = itemData!['SeriesId'];
@@ -476,19 +592,15 @@ class PlayerViewModel extends ChangeNotifier {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(await response.transform(utf8.decoder).join());
-        final items = data['Items'] as List?;
-
-        if (items != null) {
-          int currentIndex = items.indexWhere((item) => item['Id'] == itemId);
-          if (currentIndex != -1 && currentIndex + 1 < items.length) {
-            final nextItem = items[currentIndex + 1];
-            final nextUrl = '$baseUrl/Videos/${nextItem['Id']}/stream.mp4';
-            onPlayNext?.call(nextUrl, nextItem['Name'], nextItem['Id'], false);
-          }
+        _episodeItems = data['Items'] as List?;
+        if (_episodeItems != null) {
+          _currentEpisodeIndex = _episodeItems!.indexWhere((item) => item['Id'] == itemId);
+          _episodesLoaded = true;
+          notifyListeners();
         }
       }
     } catch (e) {
-      debugPrint("Błąd autoodtwarzania online: $e");
+      debugPrint("Błąd ładowania listy odcinków: $e");
     }
   }
 
