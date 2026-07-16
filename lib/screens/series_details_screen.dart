@@ -178,7 +178,9 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Text(
-              l10n.selectQualitySeason(seasonEpisodes.first.parentIndexNumber ?? 0),
+              l10n.selectQualitySeason(
+                seasonEpisodes.first.parentIndexNumber ?? 0,
+              ),
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 18,
@@ -298,6 +300,9 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
                           letterSpacing: 1.2,
                         ),
                       ),
+                      const SizedBox(width: 10),
+                      // Badge postępu sezonu
+                      _SeasonBadge(episodes: seasonEpisodes),
                     ],
                   ),
                   controlAffinity: ListTileControlAffinity.platform,
@@ -469,6 +474,61 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
               }).toList(),
             ),
       bottomNavigationBar: const AdBannerWidget(),
+    );
+  }
+}
+
+class _SeasonBadge extends StatelessWidget {
+  final List<Episode> episodes;
+  const _SeasonBadge({required this.episodes});
+
+  @override
+  Widget build(BuildContext context) {
+    int total = episodes.length;
+    int watched = episodes.where((ep) {
+      final isPlayed = ep.userData?.played ?? false;
+      if (isPlayed) return true;
+      final num? ticks = ep.userData?.playbackPositionTicks;
+      final num? runtime = ep.runTimeTicks;
+      if (ticks != null && runtime != null && runtime > 0) {
+        return (ticks / runtime) >= 0.95;
+      }
+      return false;
+    }).length;
+
+    if (total == 0) return const SizedBox.shrink();
+
+    final bool allWatched = watched >= total;
+    final Color color = allWatched
+        ? Colors.greenAccent
+        : Colors.deepPurpleAccent;
+    final IconData icon = allWatched
+        ? Icons.check_circle
+        : Icons.visibility_off;
+    final String text = "$watched/$total";
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 14),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

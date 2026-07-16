@@ -46,6 +46,17 @@ class HomeScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (resumeMovies.isNotEmpty)
+                          JellyfinSection(
+                            title: l10n.continueWatching,
+                            items: resumeMovies,
+                            baseUrl: cleanUrl,
+                            token: token,
+                            userId: userId,
+                            aspectRatio: 16 / 9,
+                            showShowAllButton: false,
+                            useSeriesImages: true,
+                          ),
                         JellyfinSection(
                           title: l10n.lasttlyAdded,
                           items: latestMovies,

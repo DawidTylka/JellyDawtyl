@@ -118,21 +118,26 @@ class _DetailsScreenState extends State<DetailsScreen> {
 
     final num? positionTicks = widget.item.userData?.playbackPositionTicks;
     final num? runTimeTicks = widget.item.runTimeTicks;
-    
+    final bool isPlayed = widget.item.userData?.played ?? false;
+
     int resumePositionMs = 0;
     double progress = 0.0;
     bool canResume = false;
+    bool isCompletelyWatched = isPlayed;
 
     if (positionTicks != null && positionTicks > 0) {
       resumePositionMs = (positionTicks / 10000).floor();
-      
+
       if (runTimeTicks != null && runTimeTicks > 0) {
         progress = positionTicks / runTimeTicks;
         if (progress > 0.01 && progress < 0.95) {
-            canResume = true;
+          canResume = true;
+        }
+        if (progress >= 0.95) {
+          isCompletelyWatched = true;
         }
       } else {
-        canResume = true; 
+        canResume = true;
       }
     }
 
@@ -160,12 +165,36 @@ class _DetailsScreenState extends State<DetailsScreen> {
               ),
             ),
 
-            if (canResume && progress > 0)
+            // Badge w 100% obejrzane (zielony znacznik zamiast paska postępu)
+            if (isCompletelyWatched && progress > 0)
+              Container(
+                color: Colors.greenAccent.withValues(alpha: 0.15),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.check_circle,
+                      color: Colors.greenAccent,
+                      size: 20,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      "Obejrzane w 100%",
+                      style: TextStyle(
+                        color: Colors.greenAccent,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else if (canResume && progress > 0)
               LinearProgressIndicator(
-                 value: progress,
-                 backgroundColor: Colors.grey[900],
-                 color: Colors.deepPurpleAccent,
-                 minHeight: 4.0,
+                value: progress,
+                backgroundColor: Colors.grey[900],
+                color: Colors.deepPurpleAccent,
+                minHeight: 4.0,
               ),
 
             Padding(
@@ -195,12 +224,15 @@ class _DetailsScreenState extends State<DetailsScreen> {
                       final activeDownload = activeDownloadsMap[widget.item.id];
                       return Column(
                         children: [
-                          if (canResume) ...[
+                          if (canResume && !isCompletelyWatched) ...[
                             _buildActionButton(
                               l10n.continueWatching,
                               Icons.play_circle_fill,
                               Colors.deepPurpleAccent,
-                              () => _playVideo(false, startPositionMs: resumePositionMs),
+                              () => _playVideo(
+                                false,
+                                startPositionMs: resumePositionMs,
+                              ),
                             ),
                             SizedBox(height: 12),
                             _buildActionButton(

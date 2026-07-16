@@ -42,7 +42,7 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
       widget.token,
       widget.userId,
     );
-    
+
     if (mounted) {
       setState(() {
         _favorites = favs;
@@ -58,7 +58,8 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
         context,
         MaterialPageRoute(
           builder: (_) => SeriesDetailsScreen(
-            series: item, // item to Movie, które dziedziczy z JellyfinItem - będzie pasować!
+            series:
+                item, // item to Movie, które dziedziczy z JellyfinItem - będzie pasować!
             baseUrl: widget.baseUrl,
             token: widget.token,
             userId: widget.userId,
@@ -92,37 +93,60 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
         elevation: 0,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.deepPurpleAccent))
+          ? const Center(
+              child: CircularProgressIndicator(color: Colors.deepPurpleAccent),
+            )
           : _favorites.isEmpty
-              ? const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.favorite_border, size: 80, color: Colors.white24),
-                      SizedBox(height: 16),
-                      Text("Brak ulubionych", style: TextStyle(color: Colors.white54, fontSize: 18)),
-                    ],
+          ? const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.favorite_border, size: 80, color: Colors.white24),
+                  SizedBox(height: 16),
+                  Text(
+                    "Brak ulubionych",
+                    style: TextStyle(color: Colors.white54, fontSize: 18),
                   ),
-                )
-              // --- TUTAJ UŻYWAMY NASZYCH NOWYCH WIDŻETÓW ---
-              : ResponsiveGridLayout(
-                  itemCount: _favorites.length,
-                  itemBuilder: (context, index) {
-                    final item = _favorites[index];
-                    final imageUrl = "${widget.baseUrl}/Items/${item.id}/Images/Primary?quality=90";
+                ],
+              ),
+            )
+          // --- TUTAJ UŻYWAMY NASZYCH NOWYCH WIDŻETÓW ---
+          : ResponsiveGridLayout(
+              itemCount: _favorites.length,
+              itemBuilder: (context, index) {
+                final item = _favorites[index];
+                final imageUrl =
+                    "${widget.baseUrl}/Items/${item.id}/Images/Primary?quality=90";
 
-                    return MediaGridCard(
-                      title: item.name ?? "Brak tytułu",
-                      // Używamy CachedNetworkImageProvider do ładowania z sieci z tokenem
-                      imageProvider: CachedNetworkImageProvider(
-                        imageUrl,
-                        headers: {"X-Emby-Token": widget.token},
-                      ),
-                      badgeIcon: item.type == 'Series' ? Icons.tv : Icons.local_movies,
-                      onTap: () => _navigateToDetails(item),
-                    );
-                  },
-                ),
+                final num? positionTicks = item.userData?.playbackPositionTicks;
+                final num? runTimeTicks = item.runTimeTicks;
+                final bool isPlayed = item.userData?.played ?? false;
+                final int? unplayedCount = item.userData?.unplayedItemCount;
+
+                double progress = 0.0;
+                if (positionTicks != null &&
+                    runTimeTicks != null &&
+                    runTimeTicks > 0) {
+                  progress = (positionTicks / runTimeTicks).clamp(0.0, 1.0);
+                }
+                final bool isWatched = isPlayed || progress >= 0.95;
+
+                return MediaGridCard(
+                  title: item.name,
+                  imageProvider: CachedNetworkImageProvider(
+                    imageUrl,
+                    headers: {"X-Emby-Token": widget.token},
+                  ),
+                  badgeIcon: item.type == 'Series'
+                      ? Icons.tv
+                      : Icons.local_movies,
+                  onTap: () => _navigateToDetails(item),
+                  progress: item.type == 'Series' ? null : progress,
+                  isWatched: item.type == 'Series' ? null : isWatched,
+                  unplayedCount: item.type == 'Series' ? unplayedCount : null,
+                );
+              },
+            ),
       bottomNavigationBar: const AdBannerWidget(),
     );
   }

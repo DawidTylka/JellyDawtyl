@@ -1,11 +1,19 @@
 class UserData {
   final int? playbackPositionTicks;
+  final bool played;
+  final int? unplayedItemCount;
 
-  UserData({this.playbackPositionTicks});
+  UserData({
+    this.playbackPositionTicks,
+    this.played = false,
+    this.unplayedItemCount,
+  });
 
   factory UserData.fromJson(Map<String, dynamic> json) {
     return UserData(
       playbackPositionTicks: json['PlaybackPositionTicks'],
+      played: json['Played'] ?? false,
+      unplayedItemCount: json['UnplayedItemCount'],
     );
   }
 }
@@ -19,7 +27,7 @@ abstract class JellyfinItem {
   final int? parentIndexNumber;
   final String? seriesName;
   final String? seriesId;
-  final int? runTimeTicks; 
+  final int? runTimeTicks;
   final UserData? userData;
 
   JellyfinItem({

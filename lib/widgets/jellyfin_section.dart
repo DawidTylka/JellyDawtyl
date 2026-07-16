@@ -47,12 +47,12 @@ class JellyfinSection extends StatelessWidget {
 
     final screenWidth = MediaQuery.of(context).size.width;
     final cardWidth = _getCardWidth(screenWidth);
-    
+
     final sectionHeight = (cardWidth / aspectRatio) + 45;
     final sectionPadding = screenWidth >= 1000 ? 24.0 : 16.0;
 
-    final cleanUrl = baseUrl.endsWith('/') 
-        ? baseUrl.substring(0, baseUrl.length - 1) 
+    final cleanUrl = baseUrl.endsWith('/')
+        ? baseUrl.substring(0, baseUrl.length - 1)
         : baseUrl;
 
     return Column(
@@ -106,7 +106,7 @@ class JellyfinSection extends StatelessWidget {
           itemCount: items.length,
           itemBuilder: (context, index) {
             final item = items[index];
-            
+
             String imageTag = "Primary";
             String itemId = item.id;
             if (useSeriesImages) {
@@ -116,16 +116,25 @@ class JellyfinSection extends StatelessWidget {
               }
             }
 
-            final imageUrl = "$cleanUrl/Items/$itemId/Images/$imageTag?quality=90";
+            final imageUrl =
+                "$cleanUrl/Items/$itemId/Images/$imageTag?quality=90";
 
-            final num? positionTicks = item.userData?.playbackPositionTicks; 
+            final num? positionTicks = item.userData?.playbackPositionTicks;
             final num? runTimeTicks = item.runTimeTicks;
+            final bool isPlayed = item.userData?.played ?? false;
+            final int? unplayedCount = item.userData?.unplayedItemCount;
 
             double progress = 0.0;
-            if (positionTicks != null && runTimeTicks != null && runTimeTicks > 0) {
+            if (positionTicks != null &&
+                runTimeTicks != null &&
+                runTimeTicks > 0) {
               progress = positionTicks / runTimeTicks;
               if (progress > 1.0) progress = 1.0;
             }
+
+            final bool isWatched = isPlayed || progress >= 0.95;
+            final bool isInProgress = progress > 0.0 && !isWatched;
+            final bool isSeries = item.type == "Series";
 
             return MouseRegion(
               cursor: SystemMouseCursors.click,
@@ -134,11 +143,17 @@ class JellyfinSection extends StatelessWidget {
                   Widget nextScreen;
                   if (item.type == "Series") {
                     nextScreen = SeriesDetailsScreen(
-                      series: item, baseUrl: cleanUrl, token: token, userId: userId
+                      series: item,
+                      baseUrl: cleanUrl,
+                      token: token,
+                      userId: userId,
                     );
                   } else {
                     nextScreen = DetailsScreen(
-                      item: item, baseUrl: cleanUrl, token: token, userId: userId
+                      item: item,
+                      baseUrl: cleanUrl,
+                      token: token,
+                      userId: userId,
                     );
                   }
 
@@ -165,10 +180,15 @@ class JellyfinSection extends StatelessWidget {
                                 imageUrl: imageUrl,
                                 httpHeaders: {"X-Emby-Token": token},
                                 fit: BoxFit.cover,
-                                placeholder: (context, url) => Container(color: Colors.grey[900]),
+                                placeholder: (context, url) =>
+                                    Container(color: Colors.grey[900]),
                                 errorWidget: (context, url, error) => Container(
                                   color: Colors.grey[800],
-                                  child: const Icon(Icons.play_circle_outline, color: Colors.white30, size: 40),
+                                  child: const Icon(
+                                    Icons.play_circle_outline,
+                                    color: Colors.white30,
+                                    size: 40,
+                                  ),
                                 ),
                               ),
                               Container(
@@ -184,18 +204,100 @@ class JellyfinSection extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                              if (progress > 0.0)
-                              Positioned(
-                                bottom: 0,
-                                left: 0,
-                                right: 0,
-                                child: LinearProgressIndicator(
-                                  value: progress,
-                                  backgroundColor: Colors.white24,
-                                  color: Colors.deepPurpleAccent,
-                                  minHeight: 4.0, // Grubość paska
+                              if (progress > 0.0 && !isSeries)
+                                Positioned(
+                                  bottom: 0,
+                                  left: 0,
+                                  right: 0,
+                                  child: LinearProgressIndicator(
+                                    value: progress,
+                                    backgroundColor: Colors.white24,
+                                    color: Colors.deepPurpleAccent,
+                                    minHeight: 4.0, // Grubość paska
+                                  ),
                                 ),
-                              ),
+
+                              // --- BADGE SERIALU (liczba nieobejrzanych) ---
+                              if (isSeries &&
+                                  unplayedCount != null &&
+                                  unplayedCount > 0)
+                                Positioned(
+                                  top: 6,
+                                  right: 6,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.deepPurpleAccent,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.visibility_off,
+                                          color: Colors.white,
+                                          size: 12,
+                                        ),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          "$unplayedCount",
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+
+                              // --- BADGE "OBEJRZANE" (serial w pełni / film / odcinek) ---
+                              if (item.type != "Series" && isWatched)
+                                Positioned(
+                                  top: 6,
+                                  right: 6,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.deepPurpleAccent,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.check,
+                                      color: Colors.white,
+                                      size: 14,
+                                    ),
+                                  ),
+                                ),
+
+                              // --- BADGE "W TRAKCIE" dla filmów i odcinków ---
+                              if (item.type != "Series" && isInProgress)
+                                Positioned(
+                                  top: 6,
+                                  right: 6,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 5,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black54,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      "${(progress * 100).toInt()}%",
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                             ],
                           ),
                         ),

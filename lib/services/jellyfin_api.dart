@@ -45,13 +45,22 @@ class JellyfinApi {
         options: Options(headers: {"X-Emby-Token": token}),
       );
       final List data = response.data['Items'] ?? [];
-      return data.where((item) {
-        final type = item['CollectionType'];
-        
-        const allowedTypes = ['movies', 'tvshows', 'boxsets', 'homevideos', 'folders'];
-        
-        return allowedTypes.contains(type) || type == null;
-      }).map((l) => Library.fromJson(l)).toList();
+      return data
+          .where((item) {
+            final type = item['CollectionType'];
+
+            const allowedTypes = [
+              'movies',
+              'tvshows',
+              'boxsets',
+              'homevideos',
+              'folders',
+            ];
+
+            return allowedTypes.contains(type) || type == null;
+          })
+          .map((l) => Library.fromJson(l))
+          .toList();
     } catch (e) {
       debugPrint("Błąd bibliotek: $e");
       return [];
@@ -70,7 +79,7 @@ class JellyfinApi {
         "$fullUrl/Users/$userId/Items/Resume",
         queryParameters: {
           "Recursive": true,
-          "Fields": "PrimaryImageAspectRatio",
+          "Fields": "PrimaryImageAspectRatio,UserData,RunTimeTicks",
         },
         options: Options(headers: {"X-Emby-Token": token}),
       );
@@ -95,7 +104,7 @@ class JellyfinApi {
         "$fullUrl/Users/$userId/Items/Latest",
         queryParameters: {
           "ParentId": libraryId,
-          "Fields": "PrimaryImageAspectRatio",
+          "Fields": "PrimaryImageAspectRatio,UserData,RunTimeTicks",
         },
         options: Options(headers: {"X-Emby-Token": token}),
       );
@@ -122,7 +131,8 @@ class JellyfinApi {
           "ParentId": libraryId,
           "Recursive": true,
           "IncludeItemTypes": "Movie,Series",
-          "Fields": "PrimaryImageAspectRatio,Overview,Type",
+          "Fields":
+              "PrimaryImageAspectRatio,Overview,Type,UserData,RunTimeTicks",
           "SortBy": "SortName",
           "SortOrder": "Ascending",
         },
@@ -149,7 +159,7 @@ class JellyfinApi {
         "$fullUrl/Shows/$seriesId/Episodes",
         queryParameters: {
           "UserId": userId,
-          "Fields": "Overview,PrimaryImageAspectRatio",
+          "Fields": "Overview,PrimaryImageAspectRatio,UserData,RunTimeTicks",
         },
         options: Options(headers: {"X-Emby-Token": token}),
       );
@@ -279,7 +289,8 @@ class JellyfinApi {
         "$fullUrl/Shows/NextUp",
         queryParameters: {
           "UserId": userId,
-          "Fields": "PrimaryImageAspectRatio,Overview,Type",
+          "Fields":
+              "PrimaryImageAspectRatio,Overview,Type,UserData,RunTimeTicks",
           "enableResumable": false,
         },
         options: Options(headers: {"X-Emby-Token": token}),
@@ -306,7 +317,8 @@ class JellyfinApi {
           "Recursive": true,
           "Filters": "IsFavorite", // Magiczny filtr API Jellyfina!
           "IncludeItemTypes": "Movie,Series",
-          "Fields": "PrimaryImageAspectRatio,Overview,Type",
+          "Fields":
+              "PrimaryImageAspectRatio,Overview,Type,UserData,RunTimeTicks",
           "SortBy": "SortName",
           "SortOrder": "Ascending",
         },

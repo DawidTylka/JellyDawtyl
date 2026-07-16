@@ -8,6 +8,9 @@ class MediaGridCard extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
+  final double? progress;
+  final bool? isWatched;
+  final int? unplayedCount;
 
   const MediaGridCard({
     super.key,
@@ -18,6 +21,9 @@ class MediaGridCard extends StatelessWidget {
     this.isSelected = false,
     required this.onTap,
     this.onLongPress,
+    this.progress,
+    this.isWatched,
+    this.unplayedCount,
   });
 
   @override
@@ -36,15 +42,21 @@ class MediaGridCard extends StatelessWidget {
                 Image(
                   image: imageProvider!,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => _buildFallback(),
+                  errorBuilder: (context, error, stackTrace) =>
+                      _buildFallback(),
                 )
               else
                 _buildFallback(),
 
               Positioned(
-                bottom: 0, left: 0, right: 0,
+                bottom: 0,
+                left: 0,
+                right: 0,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 8,
+                  ),
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
                       colors: [Colors.black87, Colors.transparent],
@@ -67,7 +79,8 @@ class MediaGridCard extends StatelessWidget {
 
               if (badgeIcon != null)
                 Positioned(
-                  top: 4, right: 4,
+                  top: 4,
+                  right: 4,
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
@@ -82,7 +95,80 @@ class MediaGridCard extends StatelessWidget {
                 Container(
                   color: Colors.deepPurple.withValues(alpha: 0.6),
                   child: const Center(
-                    child: Icon(Icons.check_circle, color: Colors.white, size: 40),
+                    child: Icon(
+                      Icons.check_circle,
+                      color: Colors.white,
+                      size: 40,
+                    ),
+                  ),
+                ),
+
+              // --- BADGE NIEODJRZANE (serial - liczba odcinków) ---
+              if (unplayedCount != null && unplayedCount! > 0)
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.deepPurpleAccent,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.visibility_off,
+                          color: Colors.white,
+                          size: 11,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          "$unplayedCount",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+              // --- BADGE "OBEJRZANE" ---
+              if (isWatched == true && unplayedCount == null)
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.deepPurpleAccent,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check,
+                      color: Colors.white,
+                      size: 14,
+                    ),
+                  ),
+                ),
+
+              // --- PASEK POSTĘPU ---
+              if (progress != null && progress! > 0.0 && unplayedCount == null)
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: LinearProgressIndicator(
+                    value: progress!.clamp(0.0, 1.0),
+                    backgroundColor: Colors.white24,
+                    color: Colors.deepPurpleAccent,
+                    minHeight: 3.0,
                   ),
                 ),
             ],
@@ -95,9 +181,7 @@ class MediaGridCard extends StatelessWidget {
   Widget _buildFallback() {
     return Container(
       color: Colors.grey[900],
-      child: Center(
-        child: Icon(fallbackIcon, color: Colors.white24, size: 40),
-      ),
+      child: Center(child: Icon(fallbackIcon, color: Colors.white24, size: 40)),
     );
   }
 }
