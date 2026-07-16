@@ -277,6 +277,40 @@ class JellyfinApi {
     }
   }
 
+  /// Pobiera listę strumieni napisów dla danego odcinka/filmu
+  Future<List<Map<String, dynamic>>> fetchSubtitleStreams(
+    String baseUrl,
+    String token,
+    String itemId,
+  ) async {
+    try {
+      final response = await _dio.get(
+        "$baseUrl/Items/$itemId",
+        queryParameters: {
+          "Fields": "MediaSources",
+        },
+        options: Options(headers: {"X-Emby-Token": token}),
+      );
+
+      final data = response.data as Map<String, dynamic>?;
+      if (data == null) return [];
+
+      final sources = data['MediaSources'] as List<dynamic>?;
+      if (sources == null || sources.isEmpty) return [];
+
+      final streams = sources.first['MediaStreams'] as List<dynamic>?;
+      if (streams == null) return [];
+
+      return streams
+          .cast<Map<String, dynamic>>()
+          .where((s) => s['Type'] == 'Subtitle')
+          .toList();
+    } catch (e) {
+      debugPrint("Błąd pobierania strumieni napisów: $e");
+      return [];
+    }
+  }
+
   // E. Pobiera "Następne w kolejce" (tylko dla seriali)
   Future<List<Movie>> fetchNextUp(
     String url,

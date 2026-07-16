@@ -198,6 +198,141 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
     );
   }
 
+  void _showDownloadSeasonSubtitles(
+    BuildContext context,
+    List<Episode> seasonEpisodes,
+    AppLocalizations l10n,
+  ) async {
+    final api = JellyfinApi();
+
+    // Zbierz dostępne języki napisów ze WSZYSTKICH odcinków
+    // Klucz: nazwa języka (np. "eng"), wartość: liczba odcinków które go mają
+    final Map<String, int> languageCount = {};
+    final Map<String, int> languageSampleIndex = {};
+
+    for (final ep in seasonEpisodes) {
+      final streams = await api.fetchSubtitleStreams(
+        widget.baseUrl,
+        widget.token,
+        ep.id,
+      );
+      for (final s in streams) {
+        final lang = s['Language'] as String? ?? 'unknown';
+        languageCount[lang] = (languageCount[lang] ?? 0) + 1;
+        // Zapamiętaj pierwszy napotkany Index dla tego języka
+        languageSampleIndex.putIfAbsent(lang, () => s['Index'] as int);
+      }
+    }
+
+    if (languageCount.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Brak dostępnych napisów dla tego sezonu"),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (!context.mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.grey[900],
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => ListView(
+        shrinkWrap: true,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              "Pobierz napisy dla sezonu ${seasonEpisodes.first.parentIndexNumber ?? ''}",
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          ...languageCount.entries.map((entry) {
+            final total = seasonEpisodes.length;
+            final available = entry.value;
+            final bool allHaveIt = available >= total;
+
+            return ListTile(
+              leading: Icon(
+                allHaveIt ? Icons.subtitles : Icons.subtitles_off,
+                color: allHaveIt ? Colors.blueAccent : Colors.orangeAccent,
+              ),
+              title: Text(
+                entry.key,
+                style: const TextStyle(color: Colors.white),
+              ),
+              subtitle: Text(
+                allHaveIt
+                    ? "Wszystkie $total odcinków"
+                    : "$available z $total odcinków (pozostałe pominięte)",
+                style: TextStyle(
+                  color: allHaveIt ? Colors.white54 : Colors.orangeAccent,
+                  fontSize: 12,
+                ),
+              ),
+              onTap: () async {
+                Navigator.pop(context);
+                await _startSeasonSubtitleDownload(
+                  seasonEpisodes,
+                  entry.key,
+                );
+              },
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _startSeasonSubtitleDownload(
+    List<Episode> episodes,
+    String languageName,
+  ) async {
+    final service = DownloadService();
+    final seasonNum = episodes.first.parentIndexNumber ?? 0;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          "Sprawdzam napisy ($languageName) dla $seasonNum odcinków...",
+        ),
+        backgroundColor: Colors.blue,
+      ),
+    );
+
+    final result = await service.downloadSeasonSubtitles(
+      episodes: episodes,
+      baseUrl: widget.baseUrl,
+      token: widget.token,
+      languageName: languageName,
+      seriesOverrideName: widget.series.name,
+    );
+
+    if (mounted) {
+      final msg = result['skipped']! > 0
+          ? "Pobrano: ${result['success']}, pominięto: ${result['skipped']} (brak napisów $languageName)"
+          : "Pobrano napisy ($languageName) dla sezonu $seasonNum";
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor:
+              result['failed']! > 0 ? Colors.orange : Colors.green,
+        ),
+      );
+    }
+  }
+
   List<Widget> _buildQualityOptions(
     BuildContext context,
     void Function(int?, int?, String) onSelect,
@@ -313,33 +448,66 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
                         horizontal: 12,
                         vertical: 4,
                       ),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: () => _showDownloadSeasonOptions(
-                            context,
-                            seasonEpisodes,
-                            l10n,
-                          ),
-                          icon: const Icon(
-                            Icons.download_for_offline,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                          label: Text(
-                            l10n.downloadSeason,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
+                      child: Column(
+                        children: [
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () => _showDownloadSeasonOptions(
+                                context,
+                                seasonEpisodes,
+                                l10n,
+                              ),
+                              icon: const Icon(
+                                Icons.download_for_offline,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                              label: Text(
+                                l10n.downloadSeason,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Colors.white24),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
                             ),
                           ),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.white24),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                          const SizedBox(height: 6),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () => _showDownloadSeasonSubtitles(
+                                context,
+                                seasonEpisodes,
+                                l10n,
+                              ),
+                              icon: const Icon(
+                                Icons.subtitles_outlined,
+                                color: Colors.blueAccent,
+                                size: 18,
+                              ),
+                              label: Text(
+                                "Pobierz napisy (sezon)",
+                                style: const TextStyle(
+                                  color: Colors.blueAccent,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Colors.blueAccent),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                     ...seasonEpisodes.map((episode) {

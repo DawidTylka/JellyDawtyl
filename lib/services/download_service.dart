@@ -441,4 +441,71 @@ class DownloadService {
 
     debugPrint("Pobrano napisy: $folderPath/$subFileName");
   }
+
+  /// Masowo pobiera napisy dla listy odcinków (cały sezon).
+  /// Dla każdego odcinka sprawdza czy istnieje strumień napisów w [languageName]
+  /// i pobiera go tylko jeśli istnieje. Pomija odcinki bez tego języka.
+  ///
+  /// Zwraca mapę z liczbami: success, skipped, failed.
+  Future<Map<String, int>> downloadSeasonSubtitles({
+    required List<JellyfinItem> episodes,
+    required String baseUrl,
+    required String token,
+    required String languageName,
+    String? seriesOverrideName,
+  }) async {
+    int success = 0;
+    int skipped = 0;
+    int failed = 0;
+    final api = JellyfinApi();
+
+    for (final episode in episodes) {
+      try {
+        // Sprawdź jakie strumienie napisów ma ten odcinek
+        final streams = await api.fetchSubtitleStreams(
+          baseUrl,
+          token,
+          episode.id,
+        );
+
+        // Znajdź strumień pasujący do wybranego języka
+        final matchingStream = streams.cast<Map<String, dynamic>>().where(
+          (s) => (s['Language'] as String? ?? '').toLowerCase() ==
+                  languageName.toLowerCase(),
+        ).toList();
+
+        if (matchingStream.isEmpty) {
+          debugPrint(
+            "Pomijam ${episode.name}: brak napisów w języku $languageName",
+          );
+          skipped++;
+          continue;
+        }
+
+        final int subtitleIndex = matchingStream.first['Index'] as int;
+
+        await downloadSubtitles(
+          item: episode,
+          baseUrl: baseUrl,
+          token: token,
+          subtitleIndex: subtitleIndex,
+          languageName: languageName,
+          seriesOverrideName: seriesOverrideName,
+        );
+        success++;
+      } catch (e) {
+        debugPrint("Błąd pobierania napisów dla ${episode.name}: $e");
+        failed++;
+      }
+    }
+
+    debugPrint(
+      "Pobieranie napisów zakończone: $success OK, $skipped pominięto, $failed błędów",
+    );
+    return {
+      'success': success,
+      'skipped': skipped,
+      'failed': failed,
+    };
+  }
 }
