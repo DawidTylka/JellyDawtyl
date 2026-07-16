@@ -4,13 +4,16 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
 
 jobs:
   # ---------------------------------------------------
-  # 1. BUDOWANIE DLA ANDROIDA I LINUXA
+  # 1. BUDOWANIE DLA ANDROIDA I LINUXA (push na main)
   # ---------------------------------------------------
   build-android-linux:
     name: Build Android & Linux
+    if: github.ref_type == 'branch'
     runs-on: ubuntu-latest
 
     steps:
@@ -49,17 +52,17 @@ jobs:
         run: flutter pub get
 
       # Budowanie wszystkich wersji Androida
-      - name: Budowanie Android APK (do testów)
+      - name: Budowanie Android APK
         run: flutter build apk --release
 
-      - name: Budowanie Android App Bundle (do Sklepu Play)
+      - name: Budowanie Android App Bundle
         run: flutter build appbundle --release
 
       # Budowanie wersji na Linuxa
       - name: Budowanie Linux App
         run: flutter build linux --release
 
-      # --- UDOSTĘPNIANIE ARTEFAKTÓW (Pliki do pobrania) ---
+      # --- UDOSTĘPNIANIE ARTEFAKTÓW ---
       
       - name: Zapamiętaj plik APK
         uses: actions/upload-artifact@v4
@@ -67,7 +70,7 @@ jobs:
           name: Android-APK
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Zapamiętaj plik App Bundle (.aab)
+      - name: Zapamiętaj plik App Bundle
         uses: actions/upload-artifact@v4
         with:
           name: Android-AppBundle
@@ -80,29 +83,60 @@ jobs:
           path: build/linux/x64/release/bundle/
 
   # ---------------------------------------------------
-  # 2. BUDOWANIE DLA WINDOWSA (na maszynie Windows)
+  # 2. RELEASE - APK bez Android SDK + GitHub Release
   # ---------------------------------------------------
-  # build-windows:
-  #   name: Build Windows
-  #   runs-on: windows-latest # Wymaga runnera z Windowsem
+  release:
+    name: Release APK (no SDK)
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
 
-  #   steps:
-  #     - name: Pobieranie kodu
-  #       uses: actions/checkout@v4
+    steps:
+      - name: Pobieranie kodu
+        uses: actions/checkout@v4
 
-  #     - name: Konfiguracja Fluttera
-  #       uses: subosito/flutter-action@v2
-  #       with:
-  #         channel: 'stable'
+      - name: Instalacja Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
 
-  #     - name: Pobieranie paczek (pub get)
-  #       run: flutter pub get
+      # Pominięto: Konfiguracja Android SDK (używa pre-instalowanego SDK)
 
-  #     - name: Budowanie Windows App (.exe)
-  #       run: flutter build windows --release
+      - name: Konfiguracja Fluttera
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
 
-  #     - name: Udostępnij paczkę Windows
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: Windows-App
-  #         path: build\windows\runner\Release\
+      - name: Odtwórz plik .env
+        run: echo "${{ secrets.ENV_FILE }}" > .env
+
+      - name: Odtwórz Keystore i właściwości
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
+          echo "${{ secrets.KEY_PROPERTIES }}" > android/app/key.properties
+
+      - name: Pobieranie paczek (pub get)
+        run: flutter pub get
+
+      - name: Budowanie APK
+        run: flutter build apk --release
+
+      - name: Zapamiętaj plik APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-APK-Release
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Utwórz GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: JellyDawtyl ${{ github.ref_name }}
+          body: |
+            ## JellyDawtyl ${{ github.ref_name }}
+
+            Automatycznie zbudowane wydanie z najnowszymi zmianami.
+          files: |
+            build/app/outputs/flutter-apk/app-release.apk
+          draft: false
+          prerelease: false
