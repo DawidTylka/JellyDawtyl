@@ -1,6 +1,8 @@
 # JellyDawtyl 🎥
 
-## Help me testing -> https://play.google.com/apps/testing/com.dawtyl.jellydawtyl
+## Help me testing
+
+I am looking for testers who would like to try out this new integration and share their feedback. If you'd like to get access, please send me an email dawid.tylka3@gmail.com and I will gladly add you to the list. Once added, you will receive a confirmation along with further instructions.
 
 ## [ENGLISH VERSION]
 
