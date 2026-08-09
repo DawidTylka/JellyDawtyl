@@ -170,6 +170,30 @@ abstract class AppLocalizations {
   /// **'Ustawienia'**
   String get settings;
 
+  /// No description provided for @language.
+  ///
+  /// In pl, this message translates to:
+  /// **'Język'**
+  String get language;
+
+  /// No description provided for @languageSelectionSubtitle.
+  ///
+  /// In pl, this message translates to:
+  /// **'Wybierz język interfejsu aplikacji'**
+  String get languageSelectionSubtitle;
+
+  /// No description provided for @languagePolish.
+  ///
+  /// In pl, this message translates to:
+  /// **'Polski'**
+  String get languagePolish;
+
+  /// No description provided for @languageEnglish.
+  ///
+  /// In pl, this message translates to:
+  /// **'English'**
+  String get languageEnglish;
+
   /// No description provided for @playback.
   ///
   /// In pl, this message translates to:

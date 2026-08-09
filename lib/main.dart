@@ -51,11 +51,24 @@ class JellyfinApp extends StatefulWidget {
 class _JellyfinAppState extends State<JellyfinApp> {
   bool _isLoadingPref = true;
   bool _showAdPrompt = false;
+  Locale _locale = const Locale('pl');
 
   @override
   void initState() {
     super.initState();
+    _loadLocalePreference();
     _checkAdPreference();
+  }
+
+  Future<void> _loadLocalePreference() async {
+    final languageCode = await StorageService().getString('setting_language');
+    final locale = languageCode != null && ['pl', 'en'].contains(languageCode)
+        ? Locale(languageCode)
+        : const Locale('pl');
+
+    if (mounted) {
+      setState(() => _locale = locale);
+    }
   }
 
   Future<void> _checkAdPreference() async {
@@ -241,6 +254,8 @@ class _JellyfinAppState extends State<JellyfinApp> {
       ),
       debugShowCheckedModeBanner: false,
       title: 'Jellyfin Client',
+      locale: _locale,
+      supportedLocales: AppLocalizations.supportedLocales,
       scrollBehavior: const MaterialScrollBehavior().copyWith(
         dragDevices: {
           PointerDeviceKind.touch,
@@ -321,7 +336,6 @@ class _JellyfinAppState extends State<JellyfinApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: const [Locale('pl', ''), Locale('en', '')],
     );
   }
 

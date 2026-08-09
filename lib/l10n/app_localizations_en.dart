@@ -45,6 +45,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settings => 'Settings';
 
   @override
+  String get language => 'Language';
+
+  @override
+  String get languageSelectionSubtitle => 'Choose the app interface language';
+
+  @override
+  String get languagePolish => 'Polski';
+
+  @override
+  String get languageEnglish => 'English';
+
+  @override
   String get playback => 'Playback';
 
   @override

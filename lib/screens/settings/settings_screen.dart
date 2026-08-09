@@ -29,6 +29,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _maxConcurrentValue = 3;
 
   String? _customDownloadPath;
+  String _selectedLanguage = 'pl';
 
   String? _hwAccelValue = 'auto';
   String? _cpuLimitValue = 'auto';
@@ -69,6 +70,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     final customPath = await _storage.getString('setting_download_path');
     final adsChoice = await _storage.getString('setting_ads_choice');
+    final languageCode = await _storage.getString('setting_language') ?? 'pl';
 
     setState(() {
       _autoPlayNext = autoPlay;
@@ -77,6 +79,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _maxConcurrentValue = maxConcurrent;
       _customDownloadPath = customPath;
       _showAds = (adsChoice == 'yes');
+      _selectedLanguage = ['pl', 'en'].contains(languageCode) ? languageCode : 'pl';
       _hwAccelValue = hwAccel;
       _cpuLimitValue = cpuLimit;
       _maxFpsValue = maxFps;
@@ -285,6 +288,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     'setting_wifionly',
                     val,
                     (v) => _downloadWifiOnly = v,
+                  ),
+                ),
+
+                ListTile(
+                  title: Text(l10n.language),
+                  subtitle: Text(l10n.languageSelectionSubtitle),
+                  trailing: DropdownButton<String>(
+                    value: _selectedLanguage,
+                    dropdownColor: const Color(0xFF1C1C1E),
+                    underline: const SizedBox(),
+                    style: const TextStyle(color: Colors.white),
+                    items: [
+                      DropdownMenuItem(value: 'pl', child: Text(l10n.languagePolish)),
+                      DropdownMenuItem(value: 'en', child: Text(l10n.languageEnglish)),
+                    ],
+                    onChanged: (value) async {
+                      if (value == null) return;
+
+                      final currentContext = context;
+                      await _storage.saveString('setting_language', value);
+
+                      if (!mounted) return;
+
+                      setState(() => _selectedLanguage = value);
+
+                      if (currentContext.mounted) {
+                        RestartWidget.restartApp(currentContext);
+                      }
+                    },
                   ),
                 ),
 

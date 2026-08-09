@@ -45,6 +45,18 @@ class AppLocalizationsPl extends AppLocalizations {
   String get settings => 'Ustawienia';
 
   @override
+  String get language => 'Język';
+
+  @override
+  String get languageSelectionSubtitle => 'Wybierz język interfejsu aplikacji';
+
+  @override
+  String get languagePolish => 'Polski';
+
+  @override
+  String get languageEnglish => 'English';
+
+  @override
   String get playback => 'Odtwarzanie';
 
   @override
