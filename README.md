@@ -1,5 +1,7 @@
 # JellyDawtyl 🎥
 
+## Help me testing -> https://play.google.com/apps/testing/com.dawtyl.jellydawtyl
+
 ## [ENGLISH VERSION]
 
 JellyDawtyl is an unofficial, lightweight client for the **Jellyfin** media server, built with Flutter. The app focuses on smooth video playback, advanced offline management, and full control over stream quality.
