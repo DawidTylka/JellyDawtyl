@@ -19,6 +19,8 @@
   "playback": "Odtwarzanie",
   "autoPlay": "Autoodtwarzanie",
   "autoPlaySub": "Odtwarzaj automatycznie następny odcinek",
+  "backgroundPlayback": "Odtwarzanie w tle",
+  "backgroundPlaybackSub": "Kontynuuj odtwarzanie po zminimalizowaniu aplikacji",
   "downloading": "Pobieranie",
   "downloadWifiOnly": "Pobieraj tylko przez Wi-Fi",
   "downloadWifiOnlySub": "Zatrzymaj pobieranie przy użyciu danych komórkowych",

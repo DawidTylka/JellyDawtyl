@@ -66,6 +66,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get autoPlaySub => 'Automatically play the next episode';
 
   @override
+  String get backgroundPlayback => 'Background playback';
+
+  @override
+  String get backgroundPlaybackSub => 'Keep playing when the app is minimized';
+
+  @override
   String get downloading => 'Downloading';
 
   @override

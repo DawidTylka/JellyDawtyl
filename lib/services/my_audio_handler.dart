@@ -30,9 +30,15 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
     _bufferSub?.cancel();
     _durationSub?.cancel();
 
-    _playingSub = _player!.stream.playing.listen((playing) => _broadcastState(playing: playing));
-    _positionSub = _player!.stream.position.listen((position) => _broadcastState(position: position));
-    _bufferSub = _player!.stream.buffer.listen((buffer) => _broadcastState(bufferedPosition: buffer));
+    _playingSub = _player!.stream.playing.listen(
+      (playing) => _broadcastState(playing: playing),
+    );
+    _positionSub = _player!.stream.position.listen(
+      (position) => _broadcastState(position: position),
+    );
+    _bufferSub = _player!.stream.buffer.listen(
+      (buffer) => _broadcastState(bufferedPosition: buffer),
+    );
     _durationSub = _player!.stream.duration.listen((dur) {
       if (dur.inSeconds > 0) {
         mediaItem.add(mediaItem.value?.copyWith(duration: dur));
@@ -40,7 +46,13 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
     });
   }
 
-  void detachPlayer() {
+  bool isAttachedTo(Player player) => identical(_player, player);
+
+  void detachPlayer(Player player) {
+    // A route replacement creates the next player before the previous route is
+    // disposed. Do not let the old route detach the newly attached player.
+    if (!identical(_player, player)) return;
+
     _player = null;
     _playingSub?.cancel();
     _positionSub?.cancel();
@@ -48,7 +60,11 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
     _durationSub?.cancel();
   }
 
-  void _broadcastState({bool? playing, Duration? position, Duration? bufferedPosition}) {
+  void _broadcastState({
+    bool? playing,
+    Duration? position,
+    Duration? bufferedPosition,
+  }) {
     if (_player == null) return;
     final isPlaying = playing ?? _player!.state.playing;
 
@@ -57,15 +73,15 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
 
     // Dodaj "Poprzedni", tylko jeśli to NIE jest pierwszy odcinek
     if (_hasPreviousEpisode) controls.add(MediaControl.skipToPrevious);
-    
+
     // Play / Pauza są zawsze na środku
     controls.add(isPlaying ? MediaControl.pause : MediaControl.play);
-    
+
     // Dodaj "Następny", tylko jeśli to NIE jest ostatni odcinek
     if (_hasNextEpisode) controls.add(MediaControl.skipToNext);
 
-    // Dynamicznie dopasowujemy indeksy. 
-    // Jeśli nie ma np. przycisku "Poprzedni", to [0,1,2] wywołałoby awarię Androida. 
+    // Dynamicznie dopasowujemy indeksy.
+    // Jeśli nie ma np. przycisku "Poprzedni", to [0,1,2] wywołałoby awarię Androida.
     // List.generate generuje bezpieczne np. [0, 1].
     final compactIndices = List.generate(controls.length, (i) => i);
 
@@ -111,5 +127,12 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> stop() async {
     await _player?.stop();
     return super.stop();
+  }
+
+  @override
+  Future<void> onTaskRemoved() async {
+    // Usunięcie aplikacji z listy ostatnich aplikacji oznacza świadome
+    // zakończenie odtwarzania. Samo zminimalizowanie nie wywołuje tej metody.
+    await stop();
   }
 }

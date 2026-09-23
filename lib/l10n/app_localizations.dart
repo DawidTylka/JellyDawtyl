@@ -212,6 +212,18 @@ abstract class AppLocalizations {
   /// **'Odtwarzaj automatycznie następny odcinek'**
   String get autoPlaySub;
 
+  /// No description provided for @backgroundPlayback.
+  ///
+  /// In pl, this message translates to:
+  /// **'Odtwarzanie w tle'**
+  String get backgroundPlayback;
+
+  /// No description provided for @backgroundPlaybackSub.
+  ///
+  /// In pl, this message translates to:
+  /// **'Kontynuuj odtwarzanie po zminimalizowaniu aplikacji'**
+  String get backgroundPlaybackSub;
+
   /// No description provided for @downloading.
   ///
   /// In pl, this message translates to:

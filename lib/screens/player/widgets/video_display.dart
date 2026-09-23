@@ -7,12 +7,14 @@ import '../player_view_model.dart';
 class PlayerVideoDisplay extends StatelessWidget {
   final PlayerViewModel viewModel;
   final String title;
+  final bool backgroundPlaybackEnabled;
   final VoidCallback onSettingsPressed;
 
   const PlayerVideoDisplay({
     super.key,
     required this.viewModel,
     required this.title,
+    required this.backgroundPlaybackEnabled,
     required this.onSettingsPressed,
   });
 
@@ -95,6 +97,7 @@ class PlayerVideoDisplay extends StatelessWidget {
       pipBuilder: (context) {
         return Video(
           controller: viewModel.controller,
+          pauseUponEnteringBackgroundMode: !backgroundPlaybackEnabled,
           controls: NoVideoControls,
           fit: BoxFit.contain,
           subtitleViewConfiguration: const SubtitleViewConfiguration(
@@ -117,6 +120,7 @@ class PlayerVideoDisplay extends StatelessWidget {
             if (constraints.maxHeight < 250 || constraints.maxWidth < 250) {
               return Video(
                 controller: viewModel.controller,
+                pauseUponEnteringBackgroundMode: !backgroundPlaybackEnabled,
                 controls: NoVideoControls,
                 fit: BoxFit.contain,
                 subtitleViewConfiguration: const SubtitleViewConfiguration(
@@ -135,6 +139,8 @@ class PlayerVideoDisplay extends StatelessWidget {
                   fullscreen: _buildControlsTheme(),
                   child: Video(
                     controller: viewModel.controller,
+                    pauseUponEnteringBackgroundMode:
+                        !backgroundPlaybackEnabled,
                     controls: MaterialVideoControls,
                     fit: BoxFit.contain,
                     subtitleViewConfiguration: const SubtitleViewConfiguration(

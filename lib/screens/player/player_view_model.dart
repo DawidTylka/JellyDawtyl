@@ -11,7 +11,6 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 // Upewnij się, że te ścieżki pasują do struktury Twojego projektu:
 import '../../../services/jellyfin_api.dart';
 import '../../../services/storage_service.dart';
-import '../../../services/my_audio_handler.dart';
 import '../../../main.dart'; // Tu znajduje się globalny audioHandler
 
 class PlayerViewModel extends ChangeNotifier {
@@ -26,8 +25,10 @@ class PlayerViewModel extends ChangeNotifier {
   final int? startPositionMs;
 
   // Callback nawigacji (wywoływany, gdy trzeba odtworzyć następny/poprzedni odcinek)
-  final void Function(String url, String title, String itemId, bool isOffline)? onPlayNext;
-  final void Function(String url, String title, String itemId, bool isOffline)? onPlayPrevious;
+  final void Function(String url, String title, String itemId, bool isOffline)?
+  onPlayNext;
+  final void Function(String url, String title, String itemId, bool isOffline)?
+  onPlayPrevious;
 
   // === Komponenty Odtwarzacza ===
   late final Player player;
@@ -47,7 +48,7 @@ class PlayerViewModel extends ChangeNotifier {
   List<dynamic> jellyfinAudioStreams = [];
   List<dynamic> jellyfinSubtitleStreams = [];
   Map<String, dynamic>? itemData;
-  
+
   String? currentExternalSubtitlePath;
   List<File> localSubtitleFiles = [];
 
@@ -57,6 +58,7 @@ class PlayerViewModel extends ChangeNotifier {
   bool _firstLoadDone = false;
   bool _hasPerformedInitialSeek = false;
   bool _isDisposed = false;
+  bool _isHandlingCompletion = false;
 
   PlayerViewModel({
     required this.originalUrl,
@@ -85,26 +87,32 @@ class PlayerViewModel extends ChangeNotifier {
   Future<void> init() async {
     try {
       WakelockPlus.enable();
-      
+
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
 
       audioHandler.attachPlayer(player);
+      final artworkUri = !isOffline && baseUrl != null && token != null
+          ? Uri.parse(
+              '$baseUrl/Items/$itemId/Images/Primary',
+            ).replace(queryParameters: {'api_key': token!})
+          : null;
       audioHandler.mediaItem.add(
-        MediaItem(id: itemId, title: title, album: 'JellyDawtyl'),
+        MediaItem(
+          id: itemId,
+          title: title,
+          album: 'JellyDawtyl',
+          artUri: artworkUri,
+        ),
       );
 
-      if (audioHandler is MyAudioHandler) {
-        final handler = audioHandler as MyAudioHandler;
-        
-        handler.onSkipToNextLocal = () {
-          if (hasNextEpisode) skipToNext();
-        };
-        
-        handler.onSkipToPreviousLocal = () {
-          if (hasPreviousEpisode) skipToPrevious();
-        };
-      }
+      audioHandler.onSkipToNextLocal = () {
+        if (hasNextEpisode) skipToNext();
+      };
+
+      audioHandler.onSkipToPreviousLocal = () {
+        if (hasPreviousEpisode) skipToPrevious();
+      };
 
       await _fetchJellyfinStreamData();
 
@@ -123,15 +131,12 @@ class PlayerViewModel extends ChangeNotifier {
       String finalSource = isOffline
           ? File(originalUrl).absolute.path
           : _buildCompatibleUrl(originalUrl);
-          
+
       final headers = token != null ? {'X-Emby-Token': token!} : null;
 
       _setupPlayerListeners();
 
-      await player.open(
-        Media(finalSource, httpHeaders: headers), 
-        play: true
-      );
+      await player.open(Media(finalSource, httpHeaders: headers), play: true);
 
       if (!isOffline && baseUrl != null) {
         _startProgressReporting();
@@ -143,9 +148,7 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   void _updateAudioHandlerEpisodeStatus() {
-    if (audioHandler is MyAudioHandler) {
-      (audioHandler as MyAudioHandler).updateEpisodeStatus(hasPreviousEpisode, hasNextEpisode);
-    }
+    audioHandler.updateEpisodeStatus(hasPreviousEpisode, hasNextEpisode);
   }
 
   void _setupPlayerListeners() {
@@ -153,7 +156,9 @@ class PlayerViewModel extends ChangeNotifier {
       if (selectedWidth != null && currentExternalSubtitlePath != null) {
         final currentId = player.state.track.subtitle.id;
         if (!currentId.contains('.srt')) {
-          player.setSubtitleTrack(SubtitleTrack.uri(currentExternalSubtitlePath!));
+          player.setSubtitleTrack(
+            SubtitleTrack.uri(currentExternalSubtitlePath!),
+          );
         }
       }
     });
@@ -161,15 +166,17 @@ class PlayerViewModel extends ChangeNotifier {
     player.stream.duration.listen((duration) async {
       if (duration.inSeconds > 0 && !_firstLoadDone) {
         _firstLoadDone = true;
-        
+
         // Daj odtwarzaczowi "odetchnąć" po otwarciu strumienia
-        await Future.delayed(const Duration(milliseconds: 200)); 
-        
+        await Future.delayed(const Duration(milliseconds: 200));
+
         if (!_isDisposed) {
           _applyInitialTracks();
-          
+
           // Seek do startPositionMs TYLKO RAZ (gwarantowana flaga)
-          if (!_hasPerformedInitialSeek && startPositionMs != null && startPositionMs! > 0) {
+          if (!_hasPerformedInitialSeek &&
+              startPositionMs != null &&
+              startPositionMs! > 0) {
             _hasPerformedInitialSeek = true;
             // Pause -> delay -> seek -> delay -> play dla stabilności
             await player.pause();
@@ -201,7 +208,7 @@ class PlayerViewModel extends ChangeNotifier {
     player.stream.error.listen((event) {
       if (!_isDisposed) {
         // Ignoruj błędy TCP - to przejściowe błędy połączeń
-        if (!event.toString().contains('tcp:') && 
+        if (!event.toString().contains('tcp:') &&
             !event.toString().contains('ffurl_read') &&
             !isLoading) {
           _setError("Wystapił błąd odtwarzania.");
@@ -229,14 +236,25 @@ class PlayerViewModel extends ChangeNotifier {
     _pendingSeek = player.state.position;
 
     if (width != null && selectedWidth == null) {
-      selectedAudioIndex = _getTrueJellyfinIndexAudio(player.state.track.audio, player.state.tracks.audio) ?? selectedAudioIndex;
-      selectedSubtitleIndex = _getTrueJellyfinIndexSub(player.state.track.subtitle, player.state.tracks.subtitle) ?? selectedSubtitleIndex;
+      selectedAudioIndex =
+          _getTrueJellyfinIndexAudio(
+            player.state.track.audio,
+            player.state.tracks.audio,
+          ) ??
+          selectedAudioIndex;
+      selectedSubtitleIndex =
+          _getTrueJellyfinIndexSub(
+            player.state.track.subtitle,
+            player.state.tracks.subtitle,
+          ) ??
+          selectedSubtitleIndex;
     }
 
     selectedWidth = width;
     selectedBitrate = bitrate;
     isLoading = true;
-    _firstLoadDone = false; // Reset, aby duration listener obsłużył _pendingSeek
+    _firstLoadDone =
+        false; // Reset, aby duration listener obsłużył _pendingSeek
     notifyListeners();
 
     final newUrl = _buildCompatibleUrl(originalUrl);
@@ -259,7 +277,11 @@ class PlayerViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setSubtitleTrack(dynamic track, {bool isJellyfinIndex = false, String? externalPath}) async {
+  Future<void> setSubtitleTrack(
+    dynamic track, {
+    bool isJellyfinIndex = false,
+    String? externalPath,
+  }) async {
     if (externalPath != null) {
       currentExternalSubtitlePath = externalPath;
       player.setSubtitleTrack(SubtitleTrack.uri(externalPath));
@@ -282,8 +304,9 @@ class PlayerViewModel extends ChangeNotifier {
   // ==========================================
   Future<void> _fetchJellyfinStreamData() async {
     if (isOffline || baseUrl == null || token == null) return;
-    
-    final httpClient = HttpClient()..badCertificateCallback = ((cert, host, port) => true);
+
+    final httpClient = HttpClient()
+      ..badCertificateCallback = ((cert, host, port) => true);
     try {
       final url = '$baseUrl/Users/$userId/Items/$itemId?api_key=$token';
       final request = await httpClient.getUrl(Uri.parse(url));
@@ -297,19 +320,28 @@ class PlayerViewModel extends ChangeNotifier {
         if (sources != null && sources.isNotEmpty) {
           final streams = sources[0]['MediaStreams'] as List?;
           if (streams != null) {
-            jellyfinAudioStreams = streams.where((s) => s['Type'] == 'Audio').toList();
-            jellyfinSubtitleStreams = streams.where((s) => s['Type'] == 'Subtitle').toList();
+            jellyfinAudioStreams = streams
+                .where((s) => s['Type'] == 'Audio')
+                .toList();
+            jellyfinSubtitleStreams = streams
+                .where((s) => s['Type'] == 'Subtitle')
+                .toList();
 
             if (selectedAudioIndex == null && jellyfinAudioStreams.isNotEmpty) {
               try {
-                selectedAudioIndex = jellyfinAudioStreams.firstWhere((s) => s['IsDefault'] == true)['Index'];
+                selectedAudioIndex = jellyfinAudioStreams.firstWhere(
+                  (s) => s['IsDefault'] == true,
+                )['Index'];
               } catch (_) {
                 selectedAudioIndex = jellyfinAudioStreams.first['Index'];
               }
             }
-            if (selectedSubtitleIndex == null && jellyfinSubtitleStreams.isNotEmpty) {
+            if (selectedSubtitleIndex == null &&
+                jellyfinSubtitleStreams.isNotEmpty) {
               try {
-                selectedSubtitleIndex = jellyfinSubtitleStreams.firstWhere((s) => s['IsDefault'] == true)['Index'];
+                selectedSubtitleIndex = jellyfinSubtitleStreams.firstWhere(
+                  (s) => s['IsDefault'] == true,
+                )['Index'];
               } catch (_) {}
             }
             notifyListeners();
@@ -327,7 +359,9 @@ class PlayerViewModel extends ChangeNotifier {
     if (isOffline) return url;
 
     if (selectedWidth != null && selectedBitrate != null && baseUrl != null) {
-      String audioParam = selectedAudioIndex != null ? '&AudioStreamIndex=$selectedAudioIndex' : '';
+      String audioParam = selectedAudioIndex != null
+          ? '&AudioStreamIndex=$selectedAudioIndex'
+          : '';
       return '$baseUrl/Videos/$itemId/master.m3u8'
           '?api_key=$token'
           '&MediaSourceId=$itemId'
@@ -350,10 +384,20 @@ class PlayerViewModel extends ChangeNotifier {
     if (token != null) query['api_key'] = token!;
     query['Static'] = 'true';
     // Usuwamy ALL problematyczne parametry które mogą kolidować z seekiem
-    query.removeWhere((key, value) => 
-      ['MaxWidth', 'VideoBitrate', 'VideoCodec', 'AudioCodec', 'MaxFramerate', 
-       'AudioBitrate', 'MaxAudioChannels', 'StartTimeTicks', 'StartTime'].contains(key));
-    
+    query.removeWhere(
+      (key, value) => [
+        'MaxWidth',
+        'VideoBitrate',
+        'VideoCodec',
+        'AudioCodec',
+        'MaxFramerate',
+        'AudioBitrate',
+        'MaxAudioChannels',
+        'StartTimeTicks',
+        'StartTime',
+      ].contains(key),
+    );
+
     return uri.replace(queryParameters: query).toString();
   }
 
@@ -364,19 +408,25 @@ class PlayerViewModel extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    final httpClient = HttpClient()..badCertificateCallback = ((cert, host, port) => true);
+    final httpClient = HttpClient()
+      ..badCertificateCallback = ((cert, host, port) => true);
     try {
-      final subUrl = '$baseUrl/Videos/$itemId/$itemId/Subtitles/$selectedSubtitleIndex/0/Stream.srt?api_key=$token';
+      final subUrl =
+          '$baseUrl/Videos/$itemId/$itemId/Subtitles/$selectedSubtitleIndex/0/Stream.srt?api_key=$token';
       final request = await httpClient.getUrl(Uri.parse(subUrl));
       final response = await request.close();
-      
+
       if (response.statusCode == 200) {
         final content = await response.transform(utf8.decoder).join();
-        final file = File('${Directory.systemTemp.path}/subs_${itemId}_$selectedSubtitleIndex.srt');
+        final file = File(
+          '${Directory.systemTemp.path}/subs_${itemId}_$selectedSubtitleIndex.srt',
+        );
         await file.writeAsString(content);
 
         currentExternalSubtitlePath = file.path;
-        player.setSubtitleTrack(SubtitleTrack.uri(currentExternalSubtitlePath!));
+        player.setSubtitleTrack(
+          SubtitleTrack.uri(currentExternalSubtitlePath!),
+        );
         notifyListeners();
       }
     } catch (e) {
@@ -391,7 +441,9 @@ class PlayerViewModel extends ChangeNotifier {
       _applyOriginalAudio();
       _applyOriginalSubtitles();
       if (isOffline && currentExternalSubtitlePath != null) {
-        player.setSubtitleTrack(SubtitleTrack.uri(currentExternalSubtitlePath!));
+        player.setSubtitleTrack(
+          SubtitleTrack.uri(currentExternalSubtitlePath!),
+        );
       }
     } else {
       if (!isOffline) await _applyExternalSubtitles();
@@ -400,8 +452,12 @@ class PlayerViewModel extends ChangeNotifier {
 
   void _applyOriginalAudio() {
     if (selectedAudioIndex == null) return;
-    final jfIndex = jellyfinAudioStreams.indexWhere((s) => s['Index'] == selectedAudioIndex);
-    final realTracks = player.state.tracks.audio.where((t) => t.id != 'no' && t.id != 'auto').toList();
+    final jfIndex = jellyfinAudioStreams.indexWhere(
+      (s) => s['Index'] == selectedAudioIndex,
+    );
+    final realTracks = player.state.tracks.audio
+        .where((t) => t.id != 'no' && t.id != 'auto')
+        .toList();
     if (jfIndex != -1 && jfIndex < realTracks.length) {
       player.setAudioTrack(realTracks[jfIndex]);
     }
@@ -412,8 +468,12 @@ class PlayerViewModel extends ChangeNotifier {
       player.setSubtitleTrack(SubtitleTrack.no());
       return;
     }
-    final jfIndex = jellyfinSubtitleStreams.indexWhere((s) => s['Index'] == selectedSubtitleIndex);
-    final realTracks = player.state.tracks.subtitle.where((t) => t.id != 'no' && t.id != 'auto').toList();
+    final jfIndex = jellyfinSubtitleStreams.indexWhere(
+      (s) => s['Index'] == selectedSubtitleIndex,
+    );
+    final realTracks = player.state.tracks.subtitle
+        .where((t) => t.id != 'no' && t.id != 'auto')
+        .toList();
     if (jfIndex != -1 && jfIndex < realTracks.length) {
       player.setSubtitleTrack(realTracks[jfIndex]);
     }
@@ -423,15 +483,22 @@ class PlayerViewModel extends ChangeNotifier {
     if (track.id == 'no' || track.id == 'auto') return null;
     final real = tracks.where((t) => t.id != 'no' && t.id != 'auto').toList();
     final pos = real.indexWhere((t) => t.id == track.id);
-    if (pos != -1 && pos < jellyfinAudioStreams.length) return jellyfinAudioStreams[pos]['Index'];
+    if (pos != -1 && pos < jellyfinAudioStreams.length) {
+      return jellyfinAudioStreams[pos]['Index'];
+    }
     return null;
   }
 
-  int? _getTrueJellyfinIndexSub(SubtitleTrack track, List<SubtitleTrack> tracks) {
+  int? _getTrueJellyfinIndexSub(
+    SubtitleTrack track,
+    List<SubtitleTrack> tracks,
+  ) {
     if (track.id == 'no' || track.id == 'auto') return null;
     final real = tracks.where((t) => t.id != 'no' && t.id != 'auto').toList();
     final pos = real.indexWhere((t) => t.id == track.id);
-    if (pos != -1 && pos < jellyfinSubtitleStreams.length) return jellyfinSubtitleStreams[pos]['Index'];
+    if (pos != -1 && pos < jellyfinSubtitleStreams.length) {
+      return jellyfinSubtitleStreams[pos]['Index'];
+    }
     return null;
   }
 
@@ -459,30 +526,49 @@ class PlayerViewModel extends ChangeNotifier {
   List<dynamic>? _episodeItems;
   int _currentEpisodeIndex = -1;
 
-  bool get hasNextEpisode => _episodesLoaded && _currentEpisodeIndex >= 0 && _currentEpisodeIndex + 1 < (_episodeItems?.length ?? 0);
+  bool get hasNextEpisode =>
+      _episodesLoaded &&
+      _currentEpisodeIndex >= 0 &&
+      _currentEpisodeIndex + 1 < (_episodeItems?.length ?? 0);
   bool get hasPreviousEpisode => _episodesLoaded && _currentEpisodeIndex > 0;
 
   /// Publiczna metoda: pomiń do następnego odcinka
   Future<void> skipToNext() async {
-    if (!hasNextEpisode) return;
+    if (_isChangingEpisode || !hasNextEpisode) return;
     _isChangingEpisode = true; // Zabezpieczenie panelu PiP!
     final nextItem = _episodeItems![_currentEpisodeIndex + 1];
     final nextUrl = isOffline
         ? (_resolveOfflineUrlForEpisode(nextItem) ?? '')
         : '$baseUrl/Videos/${nextItem['Id']}/stream.mp4';
-    onPlayNext?.call(nextUrl, nextItem['Name'] ?? 'Odcinek', nextItem['Id'] ?? '', isOffline);
+    // Zatrzymaj poprzedni strumień przed utworzeniem kolejnego ekranu.
+    // Samo dispose jest asynchroniczne w media_kit i przy zmianie z
+    // powiadomienia oba odcinki mogły przez to grać jednocześnie.
+    await player.stop();
+    if (_isDisposed) return;
+    onPlayNext?.call(
+      nextUrl,
+      nextItem['Name'] ?? 'Odcinek',
+      nextItem['Id'] ?? '',
+      isOffline,
+    );
   }
-
 
   /// Publiczna metoda: pomiń do poprzedniego odcinka
   Future<void> skipToPrevious() async {
-    if (!hasPreviousEpisode) return;
+    if (_isChangingEpisode || !hasPreviousEpisode) return;
     _isChangingEpisode = true; // Zabezpieczenie panelu PiP!
     final prevItem = _episodeItems![_currentEpisodeIndex - 1];
     final prevUrl = isOffline
         ? (_resolveOfflineUrlForEpisode(prevItem) ?? '')
         : '$baseUrl/Videos/${prevItem['Id']}/stream.mp4';
-    onPlayPrevious?.call(prevUrl, prevItem['Name'] ?? 'Odcinek', prevItem['Id'] ?? '', isOffline);
+    await player.stop();
+    if (_isDisposed) return;
+    onPlayPrevious?.call(
+      prevUrl,
+      prevItem['Name'] ?? 'Odcinek',
+      prevItem['Id'] ?? '',
+      isOffline,
+    );
   }
 
   /// W trybie offline: skanuje katalog z plikami i buduje listę odcinków
@@ -493,7 +579,10 @@ class PlayerViewModel extends ChangeNotifier {
       // Case-insensitive: .mp4, .MP4, .mkv, .MKV, .avi, .m4v itp.
       final videoFiles = dir.listSync().whereType<File>().where((f) {
         final lower = f.path.toLowerCase();
-        return lower.endsWith('.mp4') || lower.endsWith('.mkv') || lower.endsWith('.m4v') || lower.endsWith('.avi');
+        return lower.endsWith('.mp4') ||
+            lower.endsWith('.mkv') ||
+            lower.endsWith('.m4v') ||
+            lower.endsWith('.avi');
       }).toList();
 
       if (videoFiles.isEmpty) {
@@ -502,7 +591,9 @@ class PlayerViewModel extends ChangeNotifier {
       }
 
       // Sortujemy pliki aby indeksy były w dobrej kolejności
-      videoFiles.sort((a, b) => a.path.toLowerCase().compareTo(b.path.toLowerCase()));
+      videoFiles.sort(
+        (a, b) => a.path.toLowerCase().compareTo(b.path.toLowerCase()),
+      );
 
       // Budujemy listę odcinków — każdy plik w folderze to "odcinek"
       _episodeItems = [];
@@ -517,7 +608,12 @@ class PlayerViewModel extends ChangeNotifier {
         final epNum = match != null ? int.parse(match.group(2)!) : (i + 1);
         final seasonNum = match != null ? int.parse(match.group(1)!) : 1;
 
-        final title = fName.replaceAll(RegExp(r'\.(mp4|mkv|m4v|avi)$', caseSensitive: false), '').replaceAll('_', ' ');
+        final title = fName
+            .replaceAll(
+              RegExp(r'\.(mp4|mkv|m4v|avi)$', caseSensitive: false),
+              '',
+            )
+            .replaceAll('_', ' ');
         _episodeItems!.add({
           'Id': '',
           'Name': title,
@@ -535,7 +631,9 @@ class PlayerViewModel extends ChangeNotifier {
       _episodesLoaded = true;
       notifyListeners();
       _updateAudioHandlerEpisodeStatus();
-      debugPrint("Offline episodes loaded: ${_episodeItems!.length}, current index: $_currentEpisodeIndex");
+      debugPrint(
+        "Offline episodes loaded: ${_episodeItems!.length}, current index: $_currentEpisodeIndex",
+      );
     } catch (e) {
       debugPrint("Błąd ładowania offline odcinków: $e");
     }
@@ -547,43 +645,35 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   Future<void> _handlePlaybackCompleted() async {
-    final autoPlay = await StorageService().getSetting('setting_autoplay', defaultValue: true);
-    if (!autoPlay || onPlayNext == null) return;
+    if (_isHandlingCompletion || _isChangingEpisode) return;
+    _isHandlingCompletion = true;
+
+    final autoPlay = await StorageService().getSetting(
+      'setting_autoplay',
+      defaultValue: true,
+    );
+    if (_isDisposed || !autoPlay || onPlayNext == null) {
+      _isHandlingCompletion = false;
+      return;
+    }
 
     if (isOffline) {
       await _playNextOffline();
     } else {
       await _playNextOnline();
     }
+
+    if (!_isChangingEpisode) {
+      _isHandlingCompletion = false;
+    }
   }
 
   Future<void> _playNextOffline() async {
-    try {
-      final file = File(originalUrl);
-      final dir = file.parent;
-      final fileName = file.path.split(Platform.pathSeparator).last;
-
-      final RegExp regex = RegExp(r'_S(\d+)E(\d+)_');
-      final match = regex.firstMatch(fileName);
-
-      if (match != null) {
-        final seasonStr = match.group(1)!;
-        final epStr = match.group(2)!;
-        final nextEpStr = (int.parse(epStr) + 1).toString().padLeft(epStr.length, '0');
-        final searchPattern = '_S${seasonStr}E$nextEpStr';
-
-        final files = dir.listSync().whereType<File>().where((f) => f.path.endsWith('.mp4')).toList();
-        
-        for (var f in files) {
-          if (f.path.contains(searchPattern)) {
-            final nextTitle = f.path.split(Platform.pathSeparator).last.replaceAll('.mp4', '').replaceAll('_', ' ');
-            onPlayNext?.call(f.path, nextTitle, '', true);
-            break;
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint("Błąd autoodtwarzania offline: $e");
+    if (!_episodesLoaded) {
+      _loadOfflineEpisodes();
+    }
+    if (hasNextEpisode) {
+      await skipToNext();
     }
   }
 
@@ -598,13 +688,16 @@ class PlayerViewModel extends ChangeNotifier {
   Future<void> _ensureEpisodesLoaded() async {
     if (_episodesLoaded) return;
     if (itemData == null || itemData!['Type'] != 'Episode') return;
-    final httpClient = HttpClient()..badCertificateCallback = ((cert, host, port) => true);
+    final httpClient = HttpClient()
+      ..badCertificateCallback = ((cert, host, port) => true);
     try {
       final seriesId = itemData!['SeriesId'];
-      final seasonId = itemData!['SeasonId'];
       if (seriesId == null) return;
 
-      final url = '$baseUrl/Shows/$seriesId/Episodes?seasonId=$seasonId&UserId=$userId&api_key=$token';
+      // Load the whole series. Keeping the query limited to the current season
+      // made the next episode disappear at the season boundary.
+      final url =
+          '$baseUrl/Shows/$seriesId/Episodes?UserId=$userId&Limit=10000&api_key=$token';
       final request = await httpClient.getUrl(Uri.parse(url));
       final response = await request.close();
 
@@ -612,7 +705,17 @@ class PlayerViewModel extends ChangeNotifier {
         final data = jsonDecode(await response.transform(utf8.decoder).join());
         _episodeItems = data['Items'] as List?;
         if (_episodeItems != null) {
-          _currentEpisodeIndex = _episodeItems!.indexWhere((item) => item['Id'] == itemId);
+          _episodeItems!.sort((a, b) {
+            final seasonComparison = ((a['ParentIndexNumber'] as num?) ?? 0)
+                .compareTo((b['ParentIndexNumber'] as num?) ?? 0);
+            if (seasonComparison != 0) return seasonComparison;
+            return ((a['IndexNumber'] as num?) ?? 0).compareTo(
+              (b['IndexNumber'] as num?) ?? 0,
+            );
+          });
+          _currentEpisodeIndex = _episodeItems!.indexWhere(
+            (item) => item['Id'] == itemId,
+          );
           _episodesLoaded = true;
           notifyListeners();
           _updateAudioHandlerEpisodeStatus();
@@ -634,16 +737,20 @@ class PlayerViewModel extends ChangeNotifier {
       // Zabezpieczenie: usuwamy końcówkę .mp4 (niezależnie od wielkości liter) lub odcinamy parametry po '_'
       final baseName = videoFileName.contains('_')
           ? videoFileName.substring(0, videoFileName.lastIndexOf('_'))
-          : videoFileName.replaceAll(RegExp(r'\.mp4$', caseSensitive: false), '');
+          : videoFileName.replaceAll(
+              RegExp(r'\.mp4$', caseSensitive: false),
+              '',
+            );
 
       localSubtitleFiles = dir.listSync().whereType<File>().where((f) {
         final name = f.path.split(Platform.pathSeparator).last;
         return name.startsWith(baseName) && name.endsWith('.srt');
       }).toList();
 
-      if (localSubtitleFiles.isNotEmpty && currentExternalSubtitlePath == null) {
+      if (localSubtitleFiles.isNotEmpty &&
+          currentExternalSubtitlePath == null) {
         currentExternalSubtitlePath = localSubtitleFiles.first.path;
-        
+
         // WAŻNE: Informujemy interfejs, że znaleźliśmy i wybraliśmy domyślne napisy z pliku!
         notifyListeners();
       }
@@ -662,10 +769,10 @@ class PlayerViewModel extends ChangeNotifier {
   // DISPOSE
   // ==========================================
   @override
-  @override
   void dispose() {
     _isDisposed = true;
     _progressTimer?.cancel();
+    final ownsAudioSession = audioHandler.isAttachedTo(player);
 
     if (!isOffline && baseUrl != null) {
       JellyfinApi().reportPlaybackProgress(
@@ -679,16 +786,17 @@ class PlayerViewModel extends ChangeNotifier {
       );
     }
 
-    audioHandler.detachPlayer();
-    
     // UBIJAMY sesję tylko wtedy, gdy UŻYTKOWNIK WYCHODZI Z ODTWARZACZA
     // Nie ubijamy, jeśli po prostu zmienił odcinek
-    if (!_isChangingEpisode) {
+    if (ownsAudioSession && !_isChangingEpisode) {
       audioHandler.stop();
     }
-    
+    audioHandler.detachPlayer(player);
+
     player.dispose();
-    WakelockPlus.disable();
+    if (ownsAudioSession) {
+      WakelockPlus.disable();
+    }
     super.dispose();
   }
 }

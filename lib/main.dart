@@ -29,7 +29,7 @@ void main() async {
       androidNotificationChannelName: 'Odtwarzanie w tle',
       androidNotificationOngoing: true,
       androidShowNotificationBadge: true,
-      androidNotificationIcon: 'drawable/ic_notification',
+      androidNotificationIcon: 'drawable/ic_player_notification',
     ),
   );
 

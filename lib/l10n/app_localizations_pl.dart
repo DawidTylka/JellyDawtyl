@@ -66,6 +66,13 @@ class AppLocalizationsPl extends AppLocalizations {
   String get autoPlaySub => 'Odtwarzaj automatycznie następny odcinek';
 
   @override
+  String get backgroundPlayback => 'Odtwarzanie w tle';
+
+  @override
+  String get backgroundPlaybackSub =>
+      'Kontynuuj odtwarzanie po zminimalizowaniu aplikacji';
+
+  @override
   String get downloading => 'Pobieranie';
 
   @override

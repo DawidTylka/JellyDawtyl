@@ -19,6 +19,8 @@
   "playback": "Playback",
   "autoPlay": "Autoplay",
   "autoPlaySub": "Automatically play the next episode",
+  "backgroundPlayback": "Background playback",
+  "backgroundPlaybackSub": "Keep playing when the app is minimized",
   "downloading": "Downloading",
   "downloadWifiOnly": "Download on Wi-Fi only",
   "downloadWifiOnlySub": "Stop downloading when using mobile data",

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../services/storage_service.dart';
 import 'player_view_model.dart';
 import 'widgets/video_display.dart';
 import 'widgets/settings_bottom_sheet.dart';
@@ -34,11 +35,13 @@ class PlayerScreen extends StatefulWidget {
 class _PlayerScreenState extends State<PlayerScreen> {
   // 1. Inicjujemy nasz nowy mózg operacyjny - ViewModel
   late final PlayerViewModel _viewModel;
+  bool _backgroundPlaybackEnabled = false;
 
   @override
   void initState() {
     super.initState();
-    
+    _loadBackgroundPlaybackSetting();
+
     // Przekazujemy absolutnie wszystkie dane z oryginalnego widgetu do ViewModelu
     _viewModel = PlayerViewModel(
       originalUrl: widget.url,
@@ -49,20 +52,35 @@ class _PlayerScreenState extends State<PlayerScreen> {
       userId: widget.userId,
       isOffline: widget.isOffline,
       startPositionMs: widget.startPositionMs,
-      
+
       // Callback, który wywoła się, gdy ViewModel wykryje, że trzeba włączyć kolejny odcinek
       onPlayNext: _handlePlayNext,
       onPlayPrevious: _handlePlayPrevious,
     );
-    
+
     // Odpalamy całą logikę startową (Wakelock, API, Player, Subtitles)
     _viewModel.init();
   }
 
+  Future<void> _loadBackgroundPlaybackSetting() async {
+    final enabled = await StorageService().getSetting(
+      'setting_background_playback',
+      defaultValue: false,
+    );
+    if (mounted) {
+      setState(() => _backgroundPlaybackEnabled = enabled);
+    }
+  }
+
   // Funkcja odpowiedzialna za płynne przejście do kolejnego odcinka
-  void _handlePlayNext(String nextUrl, String nextTitle, String nextItemId, bool isOffline) {
+  void _handlePlayNext(
+    String nextUrl,
+    String nextTitle,
+    String nextItemId,
+    bool isOffline,
+  ) {
     if (!mounted) return;
-    
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -80,9 +98,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   // Funkcja odpowiedzialna za płynne przejście do poprzedniego odcinka
-  void _handlePlayPrevious(String prevUrl, String prevTitle, String prevItemId, bool isOffline) {
+  void _handlePlayPrevious(
+    String prevUrl,
+    String prevTitle,
+    String prevItemId,
+    bool isOffline,
+  ) {
     if (!mounted) return;
-    
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -128,12 +151,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
           return Stack(
             fit: StackFit.expand,
             children: [
-              
               // --- 1. ODTWARZACZ WIDEO, PASEK GÓRNY I GESTY ---
               // (Wszystko z Twojego pliku video_display.dart)
               PlayerVideoDisplay(
                 viewModel: _viewModel,
                 title: widget.title,
+                backgroundPlaybackEnabled: _backgroundPlaybackEnabled,
                 onSettingsPressed: _showSettingsMenu,
               ),
 
@@ -149,7 +172,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   error: _viewModel.error!,
                   onClose: () => Navigator.pop(context),
                 ),
-                
             ],
           );
         },
