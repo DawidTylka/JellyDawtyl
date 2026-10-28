@@ -757,6 +757,42 @@ abstract class AppLocalizations {
   /// In pl, this message translates to:
   /// **'Ulubione'**
   String get favorites;
+
+  /// No description provided for @addToFavorites.
+  ///
+  /// In pl, this message translates to:
+  /// **'Dodaj do ulubionych'**
+  String get addToFavorites;
+
+  /// No description provided for @removeFromFavorites.
+  ///
+  /// In pl, this message translates to:
+  /// **'Usuń z ulubionych'**
+  String get removeFromFavorites;
+
+  /// No description provided for @favoriteUpdateError.
+  ///
+  /// In pl, this message translates to:
+  /// **'Nie udało się zaktualizować ulubionych.'**
+  String get favoriteUpdateError;
+
+  /// No description provided for @markWatched.
+  ///
+  /// In pl, this message translates to:
+  /// **'Oznacz jako obejrzane'**
+  String get markWatched;
+
+  /// No description provided for @markUnwatched.
+  ///
+  /// In pl, this message translates to:
+  /// **'Oznacz jako nieobejrzane'**
+  String get markUnwatched;
+
+  /// No description provided for @watchedUpdateError.
+  ///
+  /// In pl, this message translates to:
+  /// **'Nie udało się zmienić stanu obejrzenia.'**
+  String get watchedUpdateError;
 }
 
 class _AppLocalizationsDelegate

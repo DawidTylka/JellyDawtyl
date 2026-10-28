@@ -1,25 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:io';
 import '../models/episode.dart';
+import 'favorite_button.dart';
+import '../utils/html_description.dart';
 
 class EpisodeCard extends StatelessWidget {
   final Episode episode;
   final String baseUrl;
   final String token;
+  final String userId;
   final VoidCallback onDownload;
+  final bool isOffline;
+  final File? offlineImage;
 
   const EpisodeCard({
     super.key,
     required this.episode,
     required this.baseUrl,
     required this.token,
+    required this.userId,
     required this.onDownload,
+    this.isOffline = false,
+    this.offlineImage,
   });
 
   @override
   Widget build(BuildContext context) {
     final imageUrl =
         "$baseUrl/Items/${episode.id}/Images/Primary?fillWidth=300&quality=80";
+    final overview = cleanHtmlDescription(episode.overview);
 
     // Obliczanie postępu
     final num? positionTicks = episode.userData?.playbackPositionTicks;
@@ -54,20 +64,33 @@ class EpisodeCard extends StatelessWidget {
                 ),
                 child: Stack(
                   children: [
-                    CachedNetworkImage(
-                      imageUrl: imageUrl,
-                      httpHeaders: {"X-Emby-Token": token},
-                      width: 140,
-                      height: 90,
-                      fit: BoxFit.cover,
-                      errorWidget: (context, url, error) => Container(
-                        color: Colors.black26,
-                        child: const Icon(
-                          Icons.play_circle_fill,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
+                    isOffline &&
+                            offlineImage != null &&
+                            offlineImage!.existsSync()
+                        ? Image.file(
+                            offlineImage!,
+                            width: 140,
+                            height: 90,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                _imageFallback(),
+                          )
+                        : isOffline
+                        ? _imageFallback()
+                        : CachedNetworkImage(
+                            imageUrl: imageUrl,
+                            httpHeaders: {"X-Emby-Token": token},
+                            width: 140,
+                            height: 90,
+                            fit: BoxFit.cover,
+                            errorWidget: (context, url, error) => Container(
+                              color: Colors.black26,
+                              child: const Icon(
+                                Icons.play_circle_fill,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
 
                     // --- PASEK POSTĘPU (jeśli w trakcie) ---
                     if (isInProgress)
@@ -158,22 +181,35 @@ class EpisodeCard extends StatelessWidget {
                   ),
                 ),
               ),
-              // Przycisk Pobierania
-              IconButton(
-                icon: const Icon(
-                  Icons.download_for_offline,
-                  color: Colors.white70,
-                ),
-                onPressed: onDownload,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!isOffline)
+                    FavoriteButton(
+                      baseUrl: baseUrl,
+                      token: token,
+                      userId: userId,
+                      itemId: episode.id,
+                      initialIsFavorite: episode.userData?.isFavorite ?? false,
+                      iconSize: 20,
+                    ),
+                  IconButton(
+                    icon: Icon(
+                      isOffline ? Icons.play_arrow : Icons.download_for_offline,
+                      color: Colors.white70,
+                    ),
+                    onPressed: onDownload,
+                  ),
+                ],
               ),
             ],
           ),
           // Krótki opis pod spodem (opcjonalnie)
-          if (episode.overview != null)
+          if (overview.isNotEmpty)
             Padding(
               padding: const EdgeInsets.all(10.0),
               child: Text(
-                episode.overview!,
+                overview,
                 style: const TextStyle(color: Colors.white54, fontSize: 12),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -183,4 +219,11 @@ class EpisodeCard extends StatelessWidget {
       ),
     );
   }
+
+  Widget _imageFallback() => Container(
+    width: 140,
+    height: 90,
+    color: Colors.black26,
+    child: const Icon(Icons.play_circle_fill, color: Colors.white),
+  );
 }

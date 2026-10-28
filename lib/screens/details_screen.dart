@@ -7,6 +7,7 @@ import 'player/player_screen.dart';
 import 'package:dio/dio.dart';
 import '../services/jellyfin_api.dart';
 import '../widgets/ad_banner_widget.dart';
+import '../utils/html_description.dart';
 
 class DetailsScreen extends StatefulWidget {
   final JellyfinItem item;
@@ -30,10 +31,14 @@ class _DetailsScreenState extends State<DetailsScreen> {
   String? _localFilePath;
   String? _fullOverview;
   Map<String, dynamic>? _mediaInfo;
+  late bool _isPlayed;
+  bool _isUpdatingPlayed = false;
+  bool _playedWasManuallyChanged = false;
 
   @override
   void initState() {
     super.initState();
+    _isPlayed = widget.item.userData?.played ?? false;
     _loadFullDetails();
     _loadMediaInfo();
     _scanDiskForExistingFile();
@@ -58,7 +63,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
     try {
       final dio = Dio();
       final response = await dio.get(
-        "${widget.baseUrl}/Items/${widget.item.id}",
+        "${widget.baseUrl}/Users/${widget.userId}/Items/${widget.item.id}",
         options: Options(headers: {"X-Emby-Token": widget.token}),
       );
 
@@ -67,6 +72,11 @@ class _DetailsScreenState extends State<DetailsScreen> {
           setState(() {
             _fullOverview =
                 response.data['Overview'] ?? response.data['SeriesOverview'];
+            final userData = response.data['UserData'];
+            if (!_playedWasManuallyChanged &&
+                userData is Map<String, dynamic>) {
+              _isPlayed = userData['Played'] ?? _isPlayed;
+            }
           });
         }
       }
@@ -83,6 +93,41 @@ class _DetailsScreenState extends State<DetailsScreen> {
       widget.item.id,
     );
     if (mounted) setState(() => _mediaInfo = info);
+  }
+
+  Future<void> _togglePlayed() async {
+    if (_isUpdatingPlayed) return;
+    final nextValue = !_isPlayed;
+    setState(() {
+      _isPlayed = nextValue;
+      _isUpdatingPlayed = true;
+      _playedWasManuallyChanged = true;
+    });
+
+    final success = await JellyfinApi().setPlayed(
+      baseUrl: widget.baseUrl,
+      token: widget.token,
+      userId: widget.userId,
+      itemId: widget.item.id,
+      played: nextValue,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _isUpdatingPlayed = false;
+      if (!success) {
+        _isPlayed = !nextValue;
+        _playedWasManuallyChanged = false;
+      }
+    });
+
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.watchedUpdateError),
+        ),
+      );
+    }
   }
 
   Future<void> _scanDiskForExistingFile() async {
@@ -111,6 +156,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
     final downloadService = DownloadService();
     final bool isEpisode = widget.item.type == "Episode";
     final l10n = AppLocalizations.of(context)!;
+    final description = cleanHtmlDescription(_fullOverview);
 
     final String imageUrl = isEpisode
         ? "${widget.baseUrl}/Items/${widget.item.id}/Images/Primary?quality=90"
@@ -118,12 +164,11 @@ class _DetailsScreenState extends State<DetailsScreen> {
 
     final num? positionTicks = widget.item.userData?.playbackPositionTicks;
     final num? runTimeTicks = widget.item.runTimeTicks;
-    final bool isPlayed = widget.item.userData?.played ?? false;
 
     int resumePositionMs = 0;
     double progress = 0.0;
     bool canResume = false;
-    bool isCompletelyWatched = isPlayed;
+    bool isCompletelyWatched = _isPlayed;
 
     if (positionTicks != null && positionTicks > 0) {
       resumePositionMs = (positionTicks / 10000).floor();
@@ -133,7 +178,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
         if (progress > 0.01 && progress < 0.95) {
           canResume = true;
         }
-        if (progress >= 0.95) {
+        if (progress >= 0.95 && !_playedWasManuallyChanged) {
           isCompletelyWatched = true;
         }
       } else {
@@ -142,7 +187,29 @@ class _DetailsScreenState extends State<DetailsScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          if (isEpisode)
+            IconButton(
+              tooltip: _isPlayed ? l10n.markUnwatched : l10n.markWatched,
+              onPressed: _isUpdatingPlayed ? null : _togglePlayed,
+              icon: _isUpdatingPlayed
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      _isPlayed
+                          ? Icons.check_circle
+                          : Icons.check_circle_outline,
+                      color: _isPlayed ? Colors.greenAccent : Colors.white,
+                    ),
+            ),
+        ],
+      ),
       extendBodyBehindAppBar: true,
       body: SingleChildScrollView(
         child: Column(
@@ -213,7 +280,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    _fullOverview ?? l10n.noDescription,
+                    description.isEmpty ? l10n.noDescription : description,
                     style: const TextStyle(color: Colors.grey),
                   ),
                   const SizedBox(height: 30),
@@ -283,22 +350,6 @@ class _DetailsScreenState extends State<DetailsScreen> {
                               foregroundColor: Colors.white70,
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          OutlinedButton.icon(
-                            onPressed: () =>
-                                _showSubtitleDownloadOptions(context, l10n),
-                            icon: const Icon(
-                              Icons.subtitles_outlined,
-                              color: Colors.white70,
-                            ),
-                            label: const Text("POBIERZ NAPISY (SRT)"),
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Colors.white24),
-                              minimumSize: const Size(double.infinity, 45),
-                              foregroundColor: Colors.white70,
-                              textStyle: const TextStyle(fontSize: 13),
-                            ),
-                          ),
                         ],
                       );
                     },
@@ -310,98 +361,6 @@ class _DetailsScreenState extends State<DetailsScreen> {
         ),
       ),
       bottomNavigationBar: const AdBannerWidget(),
-    );
-  }
-
-  void _showSubtitleDownloadOptions(
-    BuildContext context,
-    AppLocalizations l10n,
-  ) {
-    List subtitleStreams = [];
-
-    if (_mediaInfo != null && _mediaInfo!['raw'] != null) {
-      final rawData = _mediaInfo!['raw'];
-      if (rawData['MediaSources'] != null) {
-        final sources = rawData['MediaSources'] as List;
-        if (sources.isNotEmpty) {
-          final streams = sources[0]['MediaStreams'] as List?;
-          if (streams != null) {
-            subtitleStreams = streams
-                .where((s) => s['Type'] == 'Subtitle')
-                .toList();
-          }
-        }
-      }
-    }
-
-    if (subtitleStreams.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Brak dostępnych napisów dla tego materiału"),
-        ),
-      );
-      return;
-    }
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.grey[900],
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => ListView(
-        shrinkWrap: true,
-        children: [
-          const ListTile(
-            title: Text(
-              "Wybierz napisy do pobrania",
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          ...subtitleStreams.map((sub) {
-            final String lang = sub['Language'] ?? "Nieznany";
-            final String title =
-                sub['DisplayTitle'] ?? "Napisy ${sub['Index']}";
-
-            return ListTile(
-              leading: const Icon(Icons.subtitles, color: Colors.blueAccent),
-              title: Text(title, style: const TextStyle(color: Colors.white)),
-              onTap: () async {
-                Navigator.pop(context);
-                try {
-                  await DownloadService().downloadSubtitles(
-                    item: widget.item,
-                    baseUrl: widget.baseUrl,
-                    token: widget.token,
-                    subtitleIndex: sub['Index'],
-                    languageName: lang,
-                  );
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text("Pobrano: $title"),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Błąd zapisu napisów"),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                }
-              },
-            );
-          }),
-        ],
-      ),
     );
   }
 

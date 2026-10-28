@@ -4,6 +4,16 @@ import '../models/library.dart';
 import '../models/episode.dart';
 import 'package:flutter/foundation.dart';
 
+String _redactedNetworkError(Object error) {
+  if (error is DioException) {
+    final status = error.response?.statusCode;
+    return status == null
+        ? 'DioException (${error.type.name})'
+        : 'DioException (${error.type.name}, HTTP $status)';
+  }
+  return error.runtimeType.toString();
+}
+
 class JellyfinApi {
   final Dio _dio = Dio();
 
@@ -27,7 +37,7 @@ class JellyfinApi {
       );
       return response.data;
     } catch (e) {
-      debugPrint("Błąd logowania: $e");
+      debugPrint('Błąd logowania (${_redactedNetworkError(e)}).');
       return null;
     }
   }
@@ -62,23 +72,30 @@ class JellyfinApi {
           .map((l) => Library.fromJson(l))
           .toList();
     } catch (e) {
-      debugPrint("Błąd bibliotek: $e");
+      debugPrint('Błąd bibliotek (${_redactedNetworkError(e)}).');
       return [];
     }
   }
 
   // B. Pobiera "Kontynuuj oglądanie"
+  // Parametry jak w kliencie webowym: tylko wideo, limit 12 pozycji.
   Future<List<Movie>> fetchResumeItems(
     String url,
     String token,
-    String userId,
-  ) async {
+    String userId, {
+    String? parentId,
+    int limit = 12,
+  }) async {
     String fullUrl = url.startsWith('http') ? url : 'https://$url';
     try {
       final response = await _dio.get(
         "$fullUrl/Users/$userId/Items/Resume",
         queryParameters: {
           "Recursive": true,
+          "Limit": limit,
+          "MediaTypes": "Video",
+          "EnableTotalRecordCount": false,
+          "ParentId": ?parentId,
           "Fields": "PrimaryImageAspectRatio,UserData,RunTimeTicks",
         },
         options: Options(headers: {"X-Emby-Token": token}),
@@ -86,7 +103,7 @@ class JellyfinApi {
       final List data = response.data['Items'] ?? [];
       return data.map((m) => Movie.fromJson(m)).toList();
     } catch (e) {
-      debugPrint("Błąd Resume: $e");
+      debugPrint('Błąd Resume (${_redactedNetworkError(e)}).');
       return [];
     }
   }
@@ -111,7 +128,7 @@ class JellyfinApi {
       final List data = response.data ?? [];
       return data.map((m) => Movie.fromJson(m)).toList();
     } catch (e) {
-      debugPrint("Błąd Latest: $e");
+      debugPrint('Błąd Latest (${_redactedNetworkError(e)}).');
       return [];
     }
   }
@@ -142,7 +159,7 @@ class JellyfinApi {
       final List data = response.data['Items'] ?? [];
       return data.map((m) => Movie.fromJson(m)).toList();
     } catch (e) {
-      debugPrint("Błąd AllInLibrary: $e");
+      debugPrint('Błąd AllInLibrary (${_redactedNetworkError(e)}).');
       return [];
     }
   }
@@ -166,12 +183,12 @@ class JellyfinApi {
       final List data = response.data['Items'] ?? [];
       return data.map((e) => Episode.fromJson(e)).toList();
     } catch (e) {
-      debugPrint("Błąd pobierania odcinków: $e");
+      debugPrint('Błąd pobierania odcinków (${_redactedNetworkError(e)}).');
       return [];
     }
   }
 
-  Future<void> reportPlaybackProgress({
+  Future<bool> reportPlaybackProgress({
     required String baseUrl,
     required String token,
     required String userId,
@@ -194,8 +211,44 @@ class JellyfinApi {
         data: {"ItemId": itemId, "PositionTicks": ticks, "IsPaused": isPaused},
         options: Options(headers: {"X-Emby-Token": token}),
       );
+      return true;
     } catch (e) {
-      debugPrint("Błąd raportowania postępu: $e");
+      debugPrint('Błąd raportowania postępu (${_redactedNetworkError(e)}).');
+      return false;
+    }
+  }
+
+  /// Fetches only the per-user playback data for a bounded set of known items.
+  /// This is used to reconcile downloaded metadata without enumerating a library.
+  Future<List<Map<String, dynamic>>> fetchUserDataForItems({
+    required String baseUrl,
+    required String token,
+    required String userId,
+    required List<String> itemIds,
+  }) async {
+    if (itemIds.isEmpty) return [];
+    try {
+      final response = await _dio.get(
+        '$baseUrl/Users/$userId/Items',
+        queryParameters: {
+          'Ids': itemIds.join(','),
+          'Fields': 'UserData',
+          'EnableImages': false,
+          'EnableTotalRecordCount': false,
+        },
+        options: Options(headers: {'X-Emby-Token': token}),
+      );
+      final items = (response.data as Map?)?['Items'];
+      if (items is! List) return [];
+      return items
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    } catch (error) {
+      debugPrint(
+        'Błąd odświeżania statusów pobranych pozycji (${_redactedNetworkError(error)}).',
+      );
+      return [];
     }
   }
 
@@ -272,7 +325,7 @@ class JellyfinApi {
       debugPrint('fetchItemMediaInfo: $itemId -> $meta');
       return meta;
     } catch (e) {
-      debugPrint("Błąd pobierania mediów: $e");
+      debugPrint('Błąd pobierania mediów (${_redactedNetworkError(e)}).');
       return null;
     }
   }
@@ -286,9 +339,7 @@ class JellyfinApi {
     try {
       final response = await _dio.get(
         "$baseUrl/Items/$itemId",
-        queryParameters: {
-          "Fields": "MediaSources",
-        },
+        queryParameters: {"Fields": "MediaSources"},
         options: Options(headers: {"X-Emby-Token": token}),
       );
 
@@ -306,26 +357,37 @@ class JellyfinApi {
           .where((s) => s['Type'] == 'Subtitle')
           .toList();
     } catch (e) {
-      debugPrint("Błąd pobierania strumieni napisów: $e");
-      return [];
+      debugPrint(
+        'Błąd pobierania strumieni napisów (${_redactedNetworkError(e)}).',
+      );
+      rethrow;
     }
   }
 
   // E. Pobiera "Następne w kolejce" (tylko dla seriali)
+  // Parametry jak w kliencie webowym: limit 24, bez pozycji z "Kontynuuj
+  // oglądanie" i bez seriali nieoglądanych od ponad roku.
   Future<List<Movie>> fetchNextUp(
     String url,
     String token,
-    String userId,
-  ) async {
+    String userId, {
+    String? parentId,
+    int limit = 24,
+  }) async {
     String fullUrl = url.startsWith('http') ? url : 'https://$url';
+    final cutoff = DateTime.now().toUtc().subtract(const Duration(days: 365));
     try {
       final response = await _dio.get(
         "$fullUrl/Shows/NextUp",
         queryParameters: {
           "UserId": userId,
+          "Limit": limit,
           "Fields":
               "PrimaryImageAspectRatio,Overview,Type,UserData,RunTimeTicks",
-          "enableResumable": false,
+          "EnableResumable": false,
+          "EnableTotalRecordCount": false,
+          "NextUpDateCutoff": cutoff.toIso8601String(),
+          "ParentId": ?parentId,
         },
         options: Options(headers: {"X-Emby-Token": token}),
       );
@@ -333,7 +395,7 @@ class JellyfinApi {
       final List data = response.data['Items'] ?? [];
       return data.map((m) => Movie.fromJson(m)).toList();
     } catch (e) {
-      debugPrint("Błąd NextUp: $e");
+      debugPrint('Błąd NextUp (${_redactedNetworkError(e)}).');
       return [];
     }
   }
@@ -350,7 +412,7 @@ class JellyfinApi {
         queryParameters: {
           "Recursive": true,
           "Filters": "IsFavorite", // Magiczny filtr API Jellyfina!
-          "IncludeItemTypes": "Movie,Series",
+          "IncludeItemTypes": "Movie,Series,Episode",
           "Fields":
               "PrimaryImageAspectRatio,Overview,Type,UserData,RunTimeTicks",
           "SortBy": "SortName",
@@ -362,8 +424,58 @@ class JellyfinApi {
       final List data = response.data['Items'] ?? [];
       return data.map((m) => Movie.fromJson(m)).toList();
     } catch (e) {
-      debugPrint("Błąd pobierania ulubionych: $e");
+      debugPrint('Błąd pobierania ulubionych (${_redactedNetworkError(e)}).');
       return [];
+    }
+  }
+
+  Future<bool> setFavorite({
+    required String baseUrl,
+    required String token,
+    required String userId,
+    required String itemId,
+    required bool isFavorite,
+  }) async {
+    final fullUrl = baseUrl.startsWith('http') ? baseUrl : 'https://$baseUrl';
+    final url = '$fullUrl/Users/$userId/FavoriteItems/$itemId';
+
+    try {
+      final options = Options(headers: {'X-Emby-Token': token});
+      if (isFavorite) {
+        await _dio.post(url, options: options);
+      } else {
+        await _dio.delete(url, options: options);
+      }
+      return true;
+    } catch (e) {
+      debugPrint('Błąd aktualizacji ulubionych (${_redactedNetworkError(e)}).');
+      return false;
+    }
+  }
+
+  Future<bool> setPlayed({
+    required String baseUrl,
+    required String token,
+    required String userId,
+    required String itemId,
+    required bool played,
+  }) async {
+    final fullUrl = baseUrl.startsWith('http') ? baseUrl : 'https://$baseUrl';
+    final url = '$fullUrl/Users/$userId/PlayedItems/$itemId';
+
+    try {
+      final options = Options(headers: {'X-Emby-Token': token});
+      if (played) {
+        await _dio.post(url, options: options);
+      } else {
+        await _dio.delete(url, options: options);
+      }
+      return true;
+    } catch (e) {
+      debugPrint(
+        'Błąd aktualizacji stanu obejrzenia (${_redactedNetworkError(e)}).',
+      );
+      return false;
     }
   }
 }

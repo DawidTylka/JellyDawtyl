@@ -8,6 +8,7 @@ import '../screens/details_screen.dart';
 import '../screens/series_details_screen.dart';
 import '../widgets/responsive_grid_layout.dart';
 import '../widgets/media_grid_card.dart';
+import '../widgets/favorite_button.dart';
 
 class FavoriteScreen extends StatefulWidget {
   final String baseUrl;
@@ -144,6 +145,23 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
                   progress: item.type == 'Series' ? null : progress,
                   isWatched: item.type == 'Series' ? null : isWatched,
                   unplayedCount: item.type == 'Series' ? unplayedCount : null,
+                  topLeftAction: FavoriteButton(
+                    baseUrl: widget.baseUrl,
+                    token: widget.token,
+                    userId: widget.userId,
+                    itemId: item.id,
+                    initialIsFavorite: true,
+                    iconSize: 18,
+                    onChanged: (isFavorite) {
+                      if (!isFavorite && mounted) {
+                        setState(
+                          () => _favorites.removeWhere(
+                            (favorite) => favorite.id == item.id,
+                          ),
+                        );
+                      }
+                    },
+                  ),
                 );
               },
             ),

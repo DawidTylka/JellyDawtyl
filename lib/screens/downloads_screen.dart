@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'dart:io';
+import 'dart:convert';
 import '../l10n/app_localizations.dart';
 import 'player/player_screen.dart';
 import '../services/download_service.dart';
+import '../services/playback_sync_service.dart';
 import '../widgets/ad_banner_widget.dart';
 import '../widgets/responsive_grid_layout.dart';
 import '../widgets/media_grid_card.dart';
+import '../widgets/episode_card.dart';
+import '../models/episode.dart';
+import '../utils/html_description.dart';
 
 class DownloadsScreen extends StatefulWidget {
   const DownloadsScreen({super.key});
@@ -20,11 +26,69 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   final Set<int> _selectedIndices = {};
   bool _isSelectionMode = false;
   bool _isLoading = true;
+  bool _isSearching = false;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+
+  List<FileSystemEntity> get _visibleItems {
+    final query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return _items;
+    return _items.where((entity) {
+      if (entity is Directory) {
+        return entity.path
+            .split(Platform.pathSeparator)
+            .last
+            .toLowerCase()
+            .contains(query);
+      }
+      if (entity is File) {
+        final metadata = _readMetadata(entity);
+        final haystack = [
+          metadata?['Name'],
+          metadata?['Overview'],
+          metadata?['SeriesName'],
+          entity.uri.pathSegments.last,
+        ].whereType<String>().join(' ').toLowerCase();
+        return haystack.contains(query);
+      }
+      return false;
+    }).toList();
+  }
+
+  Map<String, dynamic>? _readMetadata(File videoFile) {
+    final jsonFile = File('${videoFile.path}.json');
+    if (!jsonFile.existsSync()) return null;
+    try {
+      final decoded = jsonDecode(jsonFile.readAsStringSync());
+      return decoded is Map<String, dynamic> ? decoded : null;
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    PlaybackSyncService.instance.downloadedMetadataRevision.addListener(
+      _onDownloadedMetadataChanged,
+    );
     _loadData();
+    unawaited(
+      PlaybackSyncService.instance.refreshDownloadedUserData(force: true),
+    );
+  }
+
+  @override
+  void dispose() {
+    PlaybackSyncService.instance.downloadedMetadataRevision.removeListener(
+      _onDownloadedMetadataChanged,
+    );
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onDownloadedMetadataChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadData() async {
@@ -94,26 +158,29 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
             child: const Text("Anuluj"),
           ),
           TextButton(
-            onPressed: () async {
-              final navigator = Navigator.of(context);
+            onPressed: () {
               List<int> sorted = _selectedIndices.toList()
                 ..sort((a, b) => b.compareTo(a));
+              final selectedEntities = sorted
+                  .where((index) => index >= 0 && index < _visibleItems.length)
+                  .map((index) => _visibleItems[index])
+                  .toList();
+              Navigator.of(context).pop();
 
-              for (int i in sorted) {
-                try {
-                  final entity = _items[i];
-                  if (entity.existsSync()) {
-                    await entity.delete(recursive: true);
+              () async {
+                for (final entity in selectedEntities) {
+                  try {
+                    if (entity.existsSync()) {
+                      await entity.delete(recursive: true);
+                    }
+                  } catch (e) {
+                    debugPrint("Nie udało się usunąć: ${e.toString()}");
                   }
-                } catch (e) {
-                  debugPrint("Nie udało się usunąć: ${e.toString()}");
                 }
-              }
-
-              if (mounted) {
-                if (context.mounted) {navigator.pop();}
-                _loadData();
-              }
+                if (mounted) {
+                  await _loadData();
+                }
+              }();
             },
             child: const Text(
               "Usuń",
@@ -154,9 +221,19 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)
               : Theme.of(context).appBarTheme.backgroundColor,
           elevation: 0,
-          title: Text(
-            _isSelectionMode ? "Zaznaczono: ${_selectedIndices.length}" : title,
-          ),
+          title: _isSelectionMode
+              ? Text("Zaznaczono: ${_selectedIndices.length}")
+              : _isSearching
+              ? TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    hintText: 'Szukaj pobranych...',
+                    border: InputBorder.none,
+                  ),
+                  onChanged: (value) => setState(() => _searchQuery = value),
+                )
+              : Text(title),
           leading: _isSelectionMode
               ? IconButton(
                   icon: const Icon(Icons.close),
@@ -166,29 +243,45 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   }),
                 )
               : (_currentFolder != null
-                  ? IconButton(
-                      icon: const Icon(Icons.arrow_back),
-                      onPressed: () {
-                        setState(() => _currentFolder = null);
-                        _loadData();
-                      },
-                    )
-                  : null),
+                    ? IconButton(
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: () {
+                          setState(() => _currentFolder = null);
+                          _loadData();
+                        },
+                      )
+                    : null),
           actions: [
             if (_isSelectionMode)
               IconButton(
                 icon: const Icon(Icons.delete_sweep),
                 onPressed: () => _deleteSelected(l10n),
               )
-            else
+            else ...[
+              if (_isSearching)
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => setState(() {
+                    _isSearching = false;
+                    _searchQuery = '';
+                    _searchController.clear();
+                  }),
+                )
+              else
+                IconButton(
+                  icon: const Icon(Icons.search),
+                  tooltip: 'Szukaj pobranych',
+                  onPressed: () => setState(() => _isSearching = true),
+                ),
               IconButton(icon: const Icon(Icons.refresh), onPressed: _loadData),
+            ],
           ],
         ),
         body: _isLoading
             ? const Center(
                 child: CircularProgressIndicator(color: Colors.deepPurple),
               )
-            : _items.isEmpty
+            : _visibleItems.isEmpty
             ? _buildEmptyState(l10n)
             : (_currentFolder == null ? _buildFolderGrid() : _buildFileList()),
 
@@ -296,9 +389,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
 
   Widget _buildFolderGrid() {
     return ResponsiveGridLayout(
-      itemCount: _items.length,
+      itemCount: _visibleItems.length,
       itemBuilder: (context, index) {
-        final folder = _items[index] as Directory;
+        final folder = _visibleItems[index] as Directory;
         final folderName = folder.path.split(Platform.pathSeparator).last;
         final coverFile = File('${folder.path}/folder.jpg');
         final isSelected = _selectedIndices.contains(index);
@@ -324,64 +417,189 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   }
 
   Widget _buildFileList() {
-    return ListView.builder(
-      itemCount: _items.length,
-      itemBuilder: (context, index) {
-        final file = _items[index] as File;
-        final fileName = file.path.split(Platform.pathSeparator).last;
-        final isSelected = _selectedIndices.contains(index);
-        final bool exists = file.existsSync();
-        final size = exists 
-            ? (file.lengthSync() / (1024 * 1024)).toStringAsFixed(1)
-            : "0.0";
+    final files = _visibleItems.whereType<File>().toList();
+    final episodes = files
+        .where((file) => _readMetadata(file)?['Type'] == 'Episode')
+        .toList();
+    final otherFiles = files.where((file) => !episodes.contains(file)).toList();
+    final seasons = <int, List<File>>{};
+    for (final file in episodes) {
+      final metadata = _readMetadata(file);
+      final season =
+          (metadata?['ParentIndexNumber'] as num?)?.toInt() ??
+          _seasonNumber(file);
+      seasons.putIfAbsent(season, () => []).add(file);
+    }
+    for (final seasonFiles in seasons.values) {
+      seasonFiles.sort(
+        (a, b) => _episodeNumber(a).compareTo(_episodeNumber(b)),
+      );
+    }
 
-        final thumbnailPath =
-            '${file.path.substring(0, file.path.length - 4)}.jpg';
-        final thumbnailFile = File(thumbnailPath);
-        final seriesCoverFile = File(
-          '${_currentFolder?.path ?? ''}/folder.jpg',
-        );
-
-        return ListTile(
-          selected: isSelected,
-          selectedTileColor: Colors.white10,
-          leading: isSelected
-              ? const Icon(Icons.check_circle, color: Colors.greenAccent)
-              : _buildThumbnail(
-                  thumbnailFile.existsSync() ? thumbnailFile : null,
-                  seriesCoverFile.existsSync() ? seriesCoverFile : null,
-                ),
-          title: Text(
-            fileName.replaceAll('.mp4', '').replaceAll('_', ' '),
-            style: const TextStyle(color: Colors.white, fontSize: 14),
-          ),
-          subtitle: Text(
-            "$size MB",
-            style: const TextStyle(color: Colors.grey),
-          ),
-          onTap: () {
-            if (_isSelectionMode) {
-              _toggleSelection(index);
-            } else {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => PlayerScreen(
-                    url: file.path,
-                    title: fileName.replaceAll('.mp4', '').replaceAll('_', ' '),
-                    isOffline: true,
-                    itemId: '',
+    return ListView(
+      children: [
+        ...seasons.entries.map((entry) {
+          final seasonFiles = entry.value;
+          final watched = seasonFiles.where(_isPlayed).length;
+          return ExpansionTile(
+            key: PageStorageKey('offline-season-${entry.key}'),
+            initiallyExpanded: true,
+            collapsedBackgroundColor: Colors.white12,
+            backgroundColor: Colors.white10,
+            leading: const Icon(Icons.video_collection, color: Colors.white),
+            title: Row(
+              children: [
+                Text(
+                  'SEZON ${entry.key}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
                   ),
                 ),
+                const SizedBox(width: 10),
+                _seasonBadge(watched, seasonFiles.length),
+              ],
+            ),
+            children: seasonFiles.map((file) {
+              final index = _visibleItems.indexOf(file);
+              final metadata = _readMetadata(file) ?? <String, dynamic>{};
+              final episode = Episode.fromJson({
+                ...metadata,
+                'Id': metadata['Id'] ?? '',
+                'Name': metadata['Name'] ?? _displayName(file),
+                'IndexNumber': metadata['IndexNumber'] ?? _episodeNumber(file),
+                'ParentIndexNumber': metadata['ParentIndexNumber'] ?? entry.key,
+              });
+              final poster = File(
+                '${file.path.substring(0, file.path.length - 4)}.jpg',
               );
-            }
-          },
-          onLongPress: () => _toggleSelection(index),
-          trailing: _isSelectionMode
-              ? null
-              : const Icon(Icons.play_arrow, color: Colors.white54),
-        );
-      },
+              final selected = _selectedIndices.contains(index);
+              return GestureDetector(
+                onLongPress: () => _toggleSelection(index),
+                onTap: () => _isSelectionMode
+                    ? _toggleSelection(index)
+                    : _playDownloaded(file, metadata),
+                child: Stack(
+                  children: [
+                    EpisodeCard(
+                      episode: episode,
+                      baseUrl: '',
+                      token: '',
+                      userId: '',
+                      isOffline: true,
+                      offlineImage: poster,
+                      onDownload: () => _isSelectionMode
+                          ? _toggleSelection(index)
+                          : _playDownloaded(file, metadata),
+                    ),
+                    if (selected)
+                      const Positioned(
+                        right: 24,
+                        top: 16,
+                        child: Icon(
+                          Icons.check_circle,
+                          color: Colors.greenAccent,
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            }).toList(),
+          );
+        }),
+        ...otherFiles.map(_buildDownloadedMovie),
+      ],
     );
   }
+
+  Widget _seasonBadge(int watched, int total) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: Colors.deepPurpleAccent.withValues(alpha: 0.25),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Text(
+      '$watched/$total',
+      style: const TextStyle(color: Colors.white70, fontSize: 12),
+    ),
+  );
+
+  Widget _buildDownloadedMovie(File file) {
+    final index = _visibleItems.indexOf(file);
+    final metadata = _readMetadata(file) ?? <String, dynamic>{};
+    final poster = File('${file.path.substring(0, file.path.length - 4)}.jpg');
+    final selected = _selectedIndices.contains(index);
+    return ListTile(
+      selected: selected,
+      leading: selected
+          ? const Icon(Icons.check_circle, color: Colors.greenAccent)
+          : _buildThumbnail(poster, File('${file.parent.path}/folder.jpg')),
+      title: Text(metadata['Name'] as String? ?? _displayName(file)),
+      subtitle: Text(
+        cleanHtmlDescription(metadata['Overview'] as String?),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+      onTap: () => _isSelectionMode
+          ? _toggleSelection(index)
+          : _playDownloaded(file, metadata),
+      onLongPress: () => _toggleSelection(index),
+    );
+  }
+
+  Future<void> _playDownloaded(File file, Map<String, dynamic> metadata) async {
+    if (_isSelectionMode) {
+      final index = _visibleItems.indexOf(file);
+      if (index >= 0) _toggleSelection(index);
+      return;
+    }
+    final userData = metadata['UserData'] as Map<String, dynamic>?;
+    final positionMs =
+        ((userData?['PlaybackPositionTicks'] as num?)?.toInt() ?? 0) ~/ 10000;
+    final durationMs =
+        ((metadata['RunTimeTicks'] as num?)?.toInt() ?? 0) ~/ 10000;
+    final isPlayed =
+        userData?['Played'] == true ||
+        (durationMs > 0 && positionMs / durationMs >= 0.95);
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PlayerScreen(
+          url: file.path,
+          title: metadata['Name'] as String? ?? _displayName(file),
+          isOffline: true,
+          itemId: metadata['Id'] as String? ?? '',
+          startPositionMs: positionMs > 0 && !isPlayed ? positionMs : null,
+        ),
+      ),
+    );
+    await _loadData();
+  }
+
+  bool _isPlayed(File file) {
+    final metadata = _readMetadata(file);
+    final userData = metadata?['UserData'] as Map<String, dynamic>?;
+    if (userData?['Played'] == true) return true;
+    final durationMs =
+        ((metadata?['RunTimeTicks'] as num?)?.toInt() ?? 0) ~/ 10000;
+    final positionMs =
+        ((userData?['PlaybackPositionTicks'] as num?)?.toInt() ?? 0) ~/ 10000;
+    return durationMs > 0 && positionMs / durationMs >= 0.95;
+  }
+
+  int _seasonNumber(File file) =>
+      int.tryParse(RegExp(r'_S(\d+)E').firstMatch(file.path)?.group(1) ?? '') ??
+      1;
+
+  int _episodeNumber(File file) =>
+      int.tryParse(
+        RegExp(r'_S\d+E(\d+)').firstMatch(file.path)?.group(1) ?? '',
+      ) ??
+      0;
+
+  String _displayName(File file) => file.uri.pathSegments.last
+      .replaceAll(RegExp(r'\.mp4$', caseSensitive: false), '')
+      .replaceAll('_', ' ');
 }

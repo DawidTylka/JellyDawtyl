@@ -5,6 +5,7 @@ import '../models/jellyfin_item.dart';
 import 'series_details_screen.dart';
 import 'details_screen.dart';
 import '../widgets/ad_banner_widget.dart';
+import '../widgets/favorite_button.dart';
 
 class CategoryItemsScreen extends StatefulWidget {
   final List<JellyfinItem> items;
@@ -144,6 +145,20 @@ class _CategoryItemsScreenState extends State<CategoryItemsScreen> {
                       ),
                     ),
                   ),
+
+                  if (movie.type == 'Series' || movie.type == 'Episode')
+                    Positioned(
+                      top: 6,
+                      left: 6,
+                      child: FavoriteButton(
+                        baseUrl: widget.baseUrl,
+                        token: widget.token,
+                        userId: widget.userId,
+                        itemId: movie.id,
+                        initialIsFavorite: movie.userData?.isFavorite ?? false,
+                        iconSize: 18,
+                      ),
+                    ),
 
                   // Badge serialu (liczba nieobejrzanych)
                   if (movie.type == "Series" &&

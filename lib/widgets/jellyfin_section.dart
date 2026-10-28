@@ -5,6 +5,7 @@ import '../screens/series_details_screen.dart';
 import '../screens/category_items_screen.dart';
 import '../models/jellyfin_item.dart';
 import 'desktop_horizontal_list_view.dart';
+import 'favorite_button.dart';
 
 class JellyfinSection extends StatelessWidget {
   final String title;
@@ -204,6 +205,21 @@ class JellyfinSection extends StatelessWidget {
                                   ),
                                 ),
                               ),
+                              if (item.type == 'Series' ||
+                                  item.type == 'Episode')
+                                Positioned(
+                                  top: 6,
+                                  left: 6,
+                                  child: FavoriteButton(
+                                    baseUrl: cleanUrl,
+                                    token: token,
+                                    userId: userId,
+                                    itemId: item.id,
+                                    initialIsFavorite:
+                                        item.userData?.isFavorite ?? false,
+                                    iconSize: 18,
+                                  ),
+                                ),
                               if (progress > 0.0 && !isSeries)
                                 Positioned(
                                   bottom: 0,

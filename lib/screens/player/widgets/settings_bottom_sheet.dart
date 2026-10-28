@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../player_view_model.dart';
-import 'dart:io';
 
 class PlayerSettingsSheet extends StatelessWidget {
   final PlayerViewModel viewModel;
@@ -33,7 +32,10 @@ class PlayerSettingsSheet extends StatelessWidget {
         // --- JAKOŚĆ WIDEO ---
         ExpansionTile(
           leading: const Icon(Icons.high_quality, color: Colors.white70),
-          title: Text(l10n.videoQuality, style: const TextStyle(color: Colors.white)),
+          title: Text(
+            l10n.videoQuality,
+            style: const TextStyle(color: Colors.white),
+          ),
           iconColor: Colors.white,
           collapsedIconColor: Colors.white70,
           children: viewModel.isOffline
@@ -44,7 +46,10 @@ class PlayerSettingsSheet extends StatelessWidget {
         // --- ŚCIEŻKI AUDIO ---
         ExpansionTile(
           leading: const Icon(Icons.audiotrack, color: Colors.white70),
-          title: Text(l10n.audioTrack, style: const TextStyle(color: Colors.white)),
+          title: Text(
+            l10n.audioTrack,
+            style: const TextStyle(color: Colors.white),
+          ),
           iconColor: Colors.white,
           collapsedIconColor: Colors.white70,
           children: _buildAudioOptions(context, l10n),
@@ -53,7 +58,10 @@ class PlayerSettingsSheet extends StatelessWidget {
         // --- NAPISY ---
         ExpansionTile(
           leading: const Icon(Icons.subtitles, color: Colors.white70),
-          title: Text(l10n.subtitles, style: const TextStyle(color: Colors.white)),
+          title: Text(
+            l10n.subtitles,
+            style: const TextStyle(color: Colors.white),
+          ),
           iconColor: Colors.white,
           collapsedIconColor: Colors.white70,
           children: _buildSubtitleOptions(context, l10n),
@@ -82,9 +90,13 @@ class PlayerSettingsSheet extends StatelessWidget {
       return ListTile(
         title: Text(
           q['label'] as String,
-          style: TextStyle(color: isSelected ? Colors.deepPurpleAccent : Colors.white70),
+          style: TextStyle(
+            color: isSelected ? Colors.deepPurpleAccent : Colors.white70,
+          ),
         ),
-        trailing: isSelected ? const Icon(Icons.check, color: Colors.deepPurpleAccent) : null,
+        trailing: isSelected
+            ? const Icon(Icons.check, color: Colors.deepPurpleAccent)
+            : null,
         onTap: () {
           viewModel.changeOnlineQuality(w, b);
           Navigator.pop(context);
@@ -96,11 +108,22 @@ class PlayerSettingsSheet extends StatelessWidget {
   List<Widget> _buildOfflineQualityOptions(BuildContext context) {
     return viewModel.player.state.tracks.video.map((t) {
       final isSelected = viewModel.player.state.track.video == t;
-      String label = t.id == 'auto' ? 'Automatyczna' : t.id == 'no' ? 'Wyłącz wideo' : '${t.w ?? '?'}x${t.h ?? '?'}';
-      
+      String label = t.id == 'auto'
+          ? 'Automatyczna'
+          : t.id == 'no'
+          ? 'Wyłącz wideo'
+          : '${t.w ?? '?'}x${t.h ?? '?'}';
+
       return ListTile(
-        title: Text(label, style: TextStyle(color: isSelected ? Colors.deepPurpleAccent : Colors.white70)),
-        trailing: isSelected ? const Icon(Icons.check, color: Colors.deepPurpleAccent) : null,
+        title: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.deepPurpleAccent : Colors.white70,
+          ),
+        ),
+        trailing: isSelected
+            ? const Icon(Icons.check, color: Colors.deepPurpleAccent)
+            : null,
         onTap: () {
           viewModel.player.setVideoTrack(t);
           Navigator.pop(context);
@@ -116,11 +139,22 @@ class PlayerSettingsSheet extends StatelessWidget {
     if (viewModel.isOffline) {
       return viewModel.player.state.tracks.audio.map((t) {
         final isSelected = viewModel.player.state.track.audio == t;
-        String label = t.id == 'auto' ? 'Automatyczna' : t.id == 'no' ? l10n.off : (t.title ?? t.language ?? 'Audio ${t.id}');
-        
+        String label = t.id == 'auto'
+            ? 'Automatyczna'
+            : t.id == 'no'
+            ? l10n.off
+            : (t.title ?? t.language ?? 'Audio ${t.id}');
+
         return ListTile(
-          title: Text(label, style: TextStyle(color: isSelected ? Colors.deepPurpleAccent : Colors.white70)),
-          trailing: isSelected ? const Icon(Icons.check, color: Colors.deepPurpleAccent) : null,
+          title: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.deepPurpleAccent : Colors.white70,
+            ),
+          ),
+          trailing: isSelected
+              ? const Icon(Icons.check, color: Colors.deepPurpleAccent)
+              : null,
           onTap: () {
             viewModel.setAudioTrack(t, isJellyfinIndex: false);
             Navigator.pop(context);
@@ -131,11 +165,19 @@ class PlayerSettingsSheet extends StatelessWidget {
       return viewModel.jellyfinAudioStreams.map((audio) {
         final idx = audio['Index'];
         final isSelected = viewModel.selectedAudioIndex == idx;
-        final label = audio['DisplayTitle'] ?? audio['Language'] ?? 'Audio $idx';
+        final label =
+            audio['DisplayTitle'] ?? audio['Language'] ?? 'Audio $idx';
 
         return ListTile(
-          title: Text(label, style: TextStyle(color: isSelected ? Colors.deepPurpleAccent : Colors.white70)),
-          trailing: isSelected ? const Icon(Icons.check, color: Colors.deepPurpleAccent) : null,
+          title: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.deepPurpleAccent : Colors.white70,
+            ),
+          ),
+          trailing: isSelected
+              ? const Icon(Icons.check, color: Colors.deepPurpleAccent)
+              : null,
           onTap: () {
             viewModel.setAudioTrack(idx, isJellyfinIndex: true);
             Navigator.pop(context);
@@ -148,51 +190,101 @@ class PlayerSettingsSheet extends StatelessWidget {
   // ==========================================
   // WIDŻETY NAPISÓW
   // ==========================================
-  List<Widget> _buildSubtitleOptions(BuildContext context, AppLocalizations l10n) {
+  List<Widget> _buildSubtitleOptions(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) {
     List<Widget> options = [];
 
     if (viewModel.isOffline) {
       // Wyłączone
-      final isOffSelected = viewModel.currentExternalSubtitlePath == null && viewModel.player.state.track.subtitle.id == 'no';
-      options.add(_buildSubTile(context, l10n.off, isOffSelected, () => viewModel.setSubtitleTrack(SubtitleTrack.no())));
+      final isOffSelected =
+          viewModel.currentExternalSubtitlePath == null &&
+          viewModel.player.state.track.subtitle.id == 'no';
+      options.add(
+        _buildSubTile(
+          context,
+          l10n.off,
+          isOffSelected,
+          () => viewModel.setSubtitleTrack(SubtitleTrack.no()),
+        ),
+      );
 
       // Wbudowane
-      for (var t in viewModel.player.state.tracks.subtitle.where((t) => t.id != 'no' && t.id != 'auto')) {
-        final isSelected = viewModel.currentExternalSubtitlePath == null && viewModel.player.state.track.subtitle == t;
-        options.add(_buildSubTile(context, t.title ?? t.language ?? 'Wbudowane ${t.id}', isSelected, () => viewModel.setSubtitleTrack(t)));
+      for (var t in viewModel.player.state.tracks.subtitle.where(
+        (t) => t.id != 'no' && t.id != 'auto',
+      )) {
+        final isSelected =
+            viewModel.currentExternalSubtitlePath == null &&
+            viewModel.player.state.track.subtitle == t;
+        options.add(
+          _buildSubTile(
+            context,
+            t.title ?? t.language ?? 'Wbudowane ${t.id}',
+            isSelected,
+            () => viewModel.setSubtitleTrack(t),
+          ),
+        );
       }
 
       // Zewnętrzne (Lokalne SRT)
       for (var file in viewModel.localSubtitleFiles) {
-        // Przywrócona logika wyciągania języka z nazwy pliku!
-        final fileName = file.path.split(Platform.pathSeparator).last;
-        final parts = fileName.split('.');
-        final label = parts.length >= 3
-            ? "Napisy (${parts[parts.length - 2].toUpperCase()})"
-            : "Napisy Zewnętrzne";
-
+        final label = viewModel.localSubtitleLabel(file);
         final isSelected = viewModel.currentExternalSubtitlePath == file.path;
-        options.add(_buildSubTile(context, label, isSelected, () => viewModel.setSubtitleTrack(null, externalPath: file.path)));
+        options.add(
+          _buildSubTile(
+            context,
+            label,
+            isSelected,
+            () => viewModel.setSubtitleTrack(null, externalPath: file.path),
+          ),
+        );
       }
     } else {
       // Wyłączone Online
-      options.add(_buildSubTile(context, l10n.off, viewModel.selectedSubtitleIndex == null, () => viewModel.setSubtitleTrack(null, isJellyfinIndex: true)));
+      options.add(
+        _buildSubTile(
+          context,
+          l10n.off,
+          viewModel.selectedSubtitleIndex == null,
+          () => viewModel.setSubtitleTrack(null, isJellyfinIndex: true),
+        ),
+      );
 
       // Online z Jellyfin API
       for (var sub in viewModel.jellyfinSubtitleStreams) {
         final idx = sub['Index'];
         final isSelected = viewModel.selectedSubtitleIndex == idx;
         final label = sub['DisplayTitle'] ?? sub['Language'] ?? 'Napisy $idx';
-        options.add(_buildSubTile(context, label, isSelected, () => viewModel.setSubtitleTrack(idx, isJellyfinIndex: true)));
+        options.add(
+          _buildSubTile(
+            context,
+            label,
+            isSelected,
+            () => viewModel.setSubtitleTrack(idx, isJellyfinIndex: true),
+          ),
+        );
       }
     }
     return options;
   }
 
-  Widget _buildSubTile(BuildContext context, String label, bool isSelected, VoidCallback action) {
+  Widget _buildSubTile(
+    BuildContext context,
+    String label,
+    bool isSelected,
+    VoidCallback action,
+  ) {
     return ListTile(
-      title: Text(label, style: TextStyle(color: isSelected ? Colors.deepPurpleAccent : Colors.white70)),
-      trailing: isSelected ? const Icon(Icons.check, color: Colors.deepPurpleAccent) : null,
+      title: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? Colors.deepPurpleAccent : Colors.white70,
+        ),
+      ),
+      trailing: isSelected
+          ? const Icon(Icons.check, color: Colors.deepPurpleAccent)
+          : null,
       onTap: () {
         action();
         Navigator.pop(context);

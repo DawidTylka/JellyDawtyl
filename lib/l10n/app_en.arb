@@ -124,5 +124,11 @@
   "audio192": "192 kbps (Good)",
   "audio128": "128 kbps (Standard)",
   "audio96": "96 kbps (Low)",
-  "favorites": "Favorites"
+  "favorites": "Favorites",
+  "addToFavorites": "Add to favorites",
+  "removeFromFavorites": "Remove from favorites",
+  "favoriteUpdateError": "Could not update favorites.",
+  "markWatched": "Mark as watched",
+  "markUnwatched": "Mark as unwatched",
+  "watchedUpdateError": "Could not update watched status."
 }

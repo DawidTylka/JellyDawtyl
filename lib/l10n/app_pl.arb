@@ -124,5 +124,11 @@
   "audio192": "192 kbps (Dobra)",
   "audio128": "128 kbps (Standard)",
   "audio96": "96 kbps (Niska)",
-  "favorites": "Ulubione"
+  "favorites": "Ulubione",
+  "addToFavorites": "Dodaj do ulubionych",
+  "removeFromFavorites": "Usuń z ulubionych",
+  "favoriteUpdateError": "Nie udało się zaktualizować ulubionych.",
+  "markWatched": "Oznacz jako obejrzane",
+  "markUnwatched": "Oznacz jako nieobejrzane",
+  "watchedUpdateError": "Nie udało się zmienić stanu obejrzenia."
 }

@@ -1,11 +1,13 @@
 class UserData {
   final int? playbackPositionTicks;
   final bool played;
+  final bool isFavorite;
   final int? unplayedItemCount;
 
   UserData({
     this.playbackPositionTicks,
     this.played = false,
+    this.isFavorite = false,
     this.unplayedItemCount,
   });
 
@@ -13,6 +15,7 @@ class UserData {
     return UserData(
       playbackPositionTicks: json['PlaybackPositionTicks'],
       played: json['Played'] ?? false,
+      isFavorite: json['IsFavorite'] ?? false,
       unplayedItemCount: json['UnplayedItemCount'],
     );
   }

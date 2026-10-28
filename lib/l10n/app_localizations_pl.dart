@@ -356,4 +356,22 @@ class AppLocalizationsPl extends AppLocalizations {
 
   @override
   String get favorites => 'Ulubione';
+
+  @override
+  String get addToFavorites => 'Dodaj do ulubionych';
+
+  @override
+  String get removeFromFavorites => 'Usuń z ulubionych';
+
+  @override
+  String get favoriteUpdateError => 'Nie udało się zaktualizować ulubionych.';
+
+  @override
+  String get markWatched => 'Oznacz jako obejrzane';
+
+  @override
+  String get markUnwatched => 'Oznacz jako nieobejrzane';
+
+  @override
+  String get watchedUpdateError => 'Nie udało się zmienić stanu obejrzenia.';
 }

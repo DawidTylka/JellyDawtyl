@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'services/jellyfin_api.dart';
@@ -9,18 +10,26 @@ import 'package:media_kit/media_kit.dart';
 import 'package:audio_service/audio_service.dart';
 import 'services/my_audio_handler.dart';
 import 'screens/downloads_screen.dart';
+import 'services/download_service.dart';
+import 'services/playback_sync_service.dart';
+import 'services/server_certificate_trust.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import '../l10n/app_localizations.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 late MyAudioHandler audioHandler;
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  ServerCertificateTrust.install();
+  await ServerCertificateTrust.restore(StorageService());
   MediaKit.ensureInitialized();
+  await PlaybackSyncService.instance.initialize();
 
   await dotenv.load(fileName: ".env");
+  await DownloadService().initialize();
 
   audioHandler = await AudioService.init(
     builder: () => MyAudioHandler(),
@@ -34,30 +43,122 @@ void main() async {
   );
 
   if (Platform.isAndroid || Platform.isIOS) {
-    await FlutterDownloader.initialize(debug: true, ignoreSsl: true);
+    await FlutterDownloader.initialize(debug: true, ignoreSsl: false);
+    await ServerCertificateTrust.syncAndroidDownloaderTrust();
+    if (Platform.isAndroid) {
+      await DownloadService().initializeBackgroundDownloads();
+    }
   }
 
   runApp(RestartWidget(child: JellyfinApp()));
 }
 
 class JellyfinApp extends StatefulWidget {
-
   const JellyfinApp({super.key});
 
   @override
   State<JellyfinApp> createState() => _JellyfinAppState();
 }
 
-class _JellyfinAppState extends State<JellyfinApp> {
+class _JellyfinAppState extends State<JellyfinApp> with WidgetsBindingObserver {
   bool _isLoadingPref = true;
   bool _showAdPrompt = false;
   Locale _locale = const Locale('pl');
+  final Set<String> _promptedFailureIds = {};
+  bool _showingFailurePrompt = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadLocalePreference();
     _checkAdPreference();
+    DownloadService().failedDownloads.addListener(_maybePromptFailedDownloads);
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _maybePromptFailedDownloads(),
+    );
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    DownloadService().failedDownloads.removeListener(
+      _maybePromptFailedDownloads,
+    );
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      PlaybackSyncService.instance.onAppResumed();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      PlaybackSyncService.instance.onAppPaused();
+    }
+  }
+
+  void _maybePromptFailedDownloads() {
+    if (_showingFailurePrompt) return;
+    final failures = DownloadService().failedDownloads.value;
+    final pending = failures
+        .where((failure) => !_promptedFailureIds.contains(failure['itemId']))
+        .toList();
+    if (pending.isEmpty) return;
+    final dialogContext = rootNavigatorKey.currentContext;
+    if (dialogContext == null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _maybePromptFailedDownloads(),
+      );
+      return;
+    }
+
+    final ids = pending.map((failure) => failure['itemId'] as String).toList();
+    _promptedFailureIds.addAll(ids);
+    _showingFailurePrompt = true;
+    final names = pending
+        .map((failure) => failure['fileName'] as String? ?? '')
+        .where((name) => name.isNotEmpty)
+        .take(3)
+        .map((name) => name.replaceAll('.mp4', '').replaceAll('_', ' '))
+        .join(', ');
+    showDialog<void>(
+      context: dialogContext,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Nieudane pobieranie'),
+        content: Text(
+          '${pending.length} ${pending.length == 1 ? 'pobieranie nie powiodło się' : 'pobrania nie powiodły się'}.${names.isEmpty ? '' : '\n$names'}\n\nCzy chcesz ponowić pobieranie?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              await DownloadService().dismissFailedDownloads(ids);
+              _showingFailurePrompt = false;
+              _maybePromptFailedDownloads();
+            },
+            child: const Text('Nie'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              _showingFailurePrompt = false;
+              unawaited(
+                DownloadService().retryFailedDownloads(ids).whenComplete(() {
+                  _promptedFailureIds.removeAll(ids);
+                  _maybePromptFailedDownloads();
+                }),
+              );
+            },
+            child: const Text('Ponów'),
+          ),
+        ],
+      ),
+    ).then((_) {
+      _showingFailurePrompt = false;
+      _maybePromptFailedDownloads();
+    });
   }
 
   Future<void> _loadLocalePreference() async {
@@ -165,8 +266,16 @@ class _JellyfinAppState extends State<JellyfinApp> {
 
   Future<Map<String, dynamic>?> checkAppData() async {
     final storage = StorageService();
-  
-    final creds = await storage.getCredentials();
+
+    Map<String, String>? creds;
+    try {
+      creds = await storage.getCredentials();
+    } catch (error) {
+      debugPrint(
+        'Nie udało się odczytać danych z bezpiecznego magazynu (${error.runtimeType}).',
+      );
+      return {'credentialStorageError': true};
+    }
 
     if (_isLoadingPref) {
       return {'loadingPreference': true};
@@ -180,24 +289,23 @@ class _JellyfinAppState extends State<JellyfinApp> {
 
     try {
       final api = JellyfinApi();
-      final libraries = await api.fetchUserLibraries(
-        creds['baseUrl']!,
-        creds['token']!,
-        creds['userId']!,
-      ).timeout(const Duration(seconds: 10));
+      final libraries = await api
+          .fetchUserLibraries(
+            creds['baseUrl']!,
+            creds['token']!,
+            creds['userId']!,
+          )
+          .timeout(const Duration(seconds: 10));
 
-      return {
-        'creds': creds,
-        'libraries': libraries,
-      };
+      return {'creds': creds, 'libraries': libraries};
     } catch (e) {
       debugPrint("Błąd weryfikacji tokena: $e");
-      
+
       if (e.toString().contains('401')) {
-        await storage.clearAll();
-        return null; 
+        await storage.clearCredentials();
+        return null;
       }
-      return null; 
+      return null;
     }
   }
 
@@ -209,8 +317,9 @@ class _JellyfinAppState extends State<JellyfinApp> {
     const secondary = Color(0xFF22D3EE);
 
     return MaterialApp(
+      navigatorKey: rootNavigatorKey,
       home: FutureBuilder<Map<String, dynamic>?>(
-        future: checkAppData(), 
+        future: checkAppData(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
@@ -228,11 +337,34 @@ class _JellyfinAppState extends State<JellyfinApp> {
           }
 
           if (data?['needsAdsPrompt'] == true) {
-            return _buildAdPromptScreen(
-              context,
-              background,
-              surface,
-              accent,
+            return _buildAdPromptScreen(context, background, surface, accent);
+          }
+
+          if (data?['credentialStorageError'] == true) {
+            return Scaffold(
+              backgroundColor: background,
+              body: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.lock_outline, color: accent, size: 40),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Nie można odczytać zapisanych danych logowania. Twoje dane nie zostały usunięte. Spróbuj ponownie.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: () => setState(() {}),
+                        child: const Text('Spróbuj ponownie'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             );
           }
 
@@ -503,6 +635,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passController = TextEditingController();
   final _api = JellyfinApi();
   bool _isLoading = false;
+  bool _trustInvalidCertificate = false;
 
   @override
   void initState() {
@@ -510,6 +643,37 @@ class _LoginScreenState extends State<LoginScreen> {
     _urlController = TextEditingController(
       text: widget.initialUrl ?? "http://192.168.0.",
     );
+    _trustInvalidCertificate = ServerCertificateTrust.trustsAddress(
+      _urlController.text,
+    );
+  }
+
+  Future<void> _setCertificateTrust(bool trusted) async {
+    final previousValue = _trustInvalidCertificate;
+    setState(() => _trustInvalidCertificate = trusted);
+    try {
+      await ServerCertificateTrust.setAddressTrusted(
+        storage: StorageService(),
+        address: _urlController.text,
+        trusted: trusted,
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(() => _trustInvalidCertificate = previousValue);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Nie udało się zapisać ustawienia certyfikatu.'),
+          ),
+        );
+      }
+    }
+  }
+
+  void _onServerAddressChanged(String value) {
+    final trusted = ServerCertificateTrust.trustsAddress(value);
+    if (_trustInvalidCertificate != trusted) {
+      setState(() => _trustInvalidCertificate = trusted);
+    }
   }
 
   void _handleLogin() async {
@@ -527,6 +691,7 @@ class _LoginScreenState extends State<LoginScreen> {
         result['AccessToken'],
         result['User']['Id'],
       );
+      PlaybackSyncService.instance.onCredentialsChanged();
       final libs = await _api.fetchUserLibraries(
         _urlController.text,
         result['AccessToken'],
@@ -614,6 +779,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           TextField(
                             controller: _urlController,
                             keyboardType: TextInputType.url,
+                            onChanged: _onServerAddressChanged,
                             decoration: InputDecoration(
                               labelText: AppLocalizations.of(
                                 context,
@@ -621,6 +787,26 @@ class _LoginScreenState extends State<LoginScreen> {
                               prefixIcon: const Icon(Icons.link_rounded),
                             ),
                           ),
+                          if (ServerCertificateTrust.addressUsesHttps(
+                            _urlController.text,
+                          )) ...[
+                            const SizedBox(height: 4),
+                            CheckboxListTile(
+                              contentPadding: EdgeInsets.zero,
+                              value: _trustInvalidCertificate,
+                              onChanged: _isLoading
+                                  ? null
+                                  : (value) =>
+                                        _setCertificateTrust(value ?? false),
+                              title: const Text(
+                                'Zaufaj certyfikatowi HTTPS serwera',
+                              ),
+                              subtitle: const Text(
+                                'Użyj tylko dla serwera z własnym lub niezaufanym certyfikatem.',
+                              ),
+                              controlAffinity: ListTileControlAffinity.leading,
+                            ),
+                          ],
                           const SizedBox(height: 14),
                           TextField(
                             controller: _userController,
@@ -702,6 +888,12 @@ class RestartWidget extends StatefulWidget {
 
   static void restartApp(BuildContext context) {
     context.findAncestorStateOfType<_RestartWidgetState>()?.restartApp();
+  }
+
+  static void restartAppFromRootNavigator() {
+    rootNavigatorKey.currentContext
+        ?.findAncestorStateOfType<_RestartWidgetState>()
+        ?.restartApp();
   }
 
   @override

@@ -353,4 +353,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get favorites => 'Favorites';
+
+  @override
+  String get addToFavorites => 'Add to favorites';
+
+  @override
+  String get removeFromFavorites => 'Remove from favorites';
+
+  @override
+  String get favoriteUpdateError => 'Could not update favorites.';
+
+  @override
+  String get markWatched => 'Mark as watched';
+
+  @override
+  String get markUnwatched => 'Mark as unwatched';
+
+  @override
+  String get watchedUpdateError => 'Could not update watched status.';
 }

@@ -1,3 +1,4 @@
+import '../../services/download_service.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../services/storage_service.dart';
@@ -290,7 +291,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           'setting_max_concurrent_downloads',
                           val,
                         );
-                        setState(() => _maxConcurrentValue = val);
+                        await DownloadService().updateConcurrencyLimit();
+                        if (mounted) setState(() => _maxConcurrentValue = val);
                       }
                     },
                   ),
@@ -569,24 +571,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
               });
             },
             (FormError formError) {
-              debugPrint("Błąd ładowania formularza UMP: ${formError.message}");
+              debugPrint(
+                "BĹ‚Ä…d Ĺ‚adowania formularza UMP: ${formError.message}",
+              );
             },
           );
         }
       },
       (FormError error) {
-        debugPrint("Błąd sprawdzania statusu UMP: ${error.message}");
+        debugPrint("BĹ‚Ä…d sprawdzania statusu UMP: ${error.message}");
       },
     );
   }
 
   Future<void> _logout() async {
-    await _storage.saveString('token', '');
-    await _storage.saveString('userId', '');
+    await _storage.clearCredentials();
 
-    if (mounted) {
-      RestartWidget.restartApp(context);
-    }
+    if (!mounted) return;
+    RestartWidget.restartAppFromRootNavigator();
   }
 
   Future<void> _openAdminPanel() async {

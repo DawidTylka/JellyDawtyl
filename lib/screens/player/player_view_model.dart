@@ -11,6 +11,8 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 // Upewnij się, że te ścieżki pasują do struktury Twojego projektu:
 import '../../../services/jellyfin_api.dart';
 import '../../../services/storage_service.dart';
+import '../../../services/playback_sync_service.dart';
+import '../../../services/server_certificate_trust.dart';
 import '../../../main.dart'; // Tu znajduje się globalny audioHandler
 
 class PlayerViewModel extends ChangeNotifier {
@@ -51,6 +53,7 @@ class PlayerViewModel extends ChangeNotifier {
 
   String? currentExternalSubtitlePath;
   List<File> localSubtitleFiles = [];
+  final Map<String, String> localSubtitleLabels = {};
 
   // === Stan Wewnętrzny Logiki ===
   Timer? _progressTimer;
@@ -92,11 +95,7 @@ class PlayerViewModel extends ChangeNotifier {
       await session.configure(const AudioSessionConfiguration.music());
 
       audioHandler.attachPlayer(player);
-      final artworkUri = !isOffline && baseUrl != null && token != null
-          ? Uri.parse(
-              '$baseUrl/Items/$itemId/Images/Primary',
-            ).replace(queryParameters: {'api_key': token!})
-          : null;
+      final artworkUri = await _cacheArtworkUri();
       audioHandler.mediaItem.add(
         MediaItem(
           id: itemId,
@@ -125,7 +124,7 @@ class PlayerViewModel extends ChangeNotifier {
 
       if (isOffline) {
         await player.setRate(1.0);
-        _findLocalSubtitles();
+        await _findLocalSubtitles();
       }
 
       String finalSource = isOffline
@@ -138,7 +137,7 @@ class PlayerViewModel extends ChangeNotifier {
 
       await player.open(Media(finalSource, httpHeaders: headers), play: true);
 
-      if (!isOffline && baseUrl != null) {
+      if (isOffline || baseUrl != null) {
         _startProgressReporting();
       }
     } catch (e) {
@@ -149,6 +148,37 @@ class PlayerViewModel extends ChangeNotifier {
 
   void _updateAudioHandlerEpisodeStatus() {
     audioHandler.updateEpisodeStatus(hasPreviousEpisode, hasNextEpisode);
+  }
+
+  Future<Uri?> _cacheArtworkUri() async {
+    if (isOffline || baseUrl == null || token == null) return null;
+    final client = HttpClient()
+      ..badCertificateCallback =
+          ServerCertificateTrust.acceptsInvalidCertificate;
+    try {
+      final request = await client.getUrl(
+        Uri.parse('$baseUrl/Items/$itemId/Images/Primary'),
+      );
+      request.headers.set('X-Emby-Token', token!);
+      final response = await request.close().timeout(
+        const Duration(seconds: 5),
+      );
+      if (response.statusCode != HttpStatus.ok) return null;
+      final bytes = await response
+          .fold<List<int>>(<int>[], (buffer, chunk) => buffer..addAll(chunk))
+          .timeout(const Duration(seconds: 5));
+      if (bytes.isEmpty) return null;
+      final file = File('${Directory.systemTemp.path}/jellydawtyl_art_$itemId');
+      await file.writeAsBytes(bytes, flush: true);
+      return file.uri;
+    } catch (error) {
+      debugPrint(
+        'Nie udało się pobrać grafiki odtwarzania (${error.runtimeType}).',
+      );
+      return null;
+    } finally {
+      client.close();
+    }
   }
 
   void _setupPlayerListeners() {
@@ -306,10 +336,12 @@ class PlayerViewModel extends ChangeNotifier {
     if (isOffline || baseUrl == null || token == null) return;
 
     final httpClient = HttpClient()
-      ..badCertificateCallback = ((cert, host, port) => true);
+      ..badCertificateCallback =
+          ServerCertificateTrust.acceptsInvalidCertificate;
     try {
-      final url = '$baseUrl/Users/$userId/Items/$itemId?api_key=$token';
-      final request = await httpClient.getUrl(Uri.parse(url));
+      final url = Uri.parse('$baseUrl/Users/$userId/Items/$itemId');
+      final request = await httpClient.getUrl(url);
+      request.headers.set('X-Emby-Token', token!);
       final response = await request.close();
 
       if (response.statusCode == 200) {
@@ -349,7 +381,7 @@ class PlayerViewModel extends ChangeNotifier {
         }
       }
     } catch (e) {
-      debugPrint("Błąd pobierania strumieni: $e");
+      debugPrint('Błąd pobierania strumieni (${e.runtimeType}).');
     } finally {
       httpClient.close();
     }
@@ -359,29 +391,31 @@ class PlayerViewModel extends ChangeNotifier {
     if (isOffline) return url;
 
     if (selectedWidth != null && selectedBitrate != null && baseUrl != null) {
-      String audioParam = selectedAudioIndex != null
-          ? '&AudioStreamIndex=$selectedAudioIndex'
-          : '';
-      return '$baseUrl/Videos/$itemId/master.m3u8'
-          '?api_key=$token'
-          '&MediaSourceId=$itemId'
-          '&VideoCodec=h264'
-          '&AudioCodec=aac,mp3'
-          '&VideoBitrate=$selectedBitrate'
-          '&AudioBitrate=320000'
-          '&MaxWidth=$selectedWidth'
-          '&TranscodingMaxAudioChannels=2'
-          '&SegmentContainer=ts'
-          '&MinSegments=1'
-          '&BreakOnNonKeyFrames=True'
-          '&EnableAdaptiveBitrateStreaming=true'
-          '&RequireAvc=false'
-          '$audioParam';
+      final query = <String, String>{
+        'MediaSourceId': itemId,
+        'VideoCodec': 'h264',
+        'AudioCodec': 'aac,mp3',
+        'VideoBitrate': '$selectedBitrate',
+        'AudioBitrate': '320000',
+        'MaxWidth': '$selectedWidth',
+        'TranscodingMaxAudioChannels': '2',
+        'SegmentContainer': 'ts',
+        'MinSegments': '1',
+        'BreakOnNonKeyFrames': 'True',
+        'EnableAdaptiveBitrateStreaming': 'true',
+        'RequireAvc': 'false',
+      };
+      if (selectedAudioIndex != null) {
+        query['AudioStreamIndex'] = '$selectedAudioIndex';
+      }
+      return Uri.parse(
+        '$baseUrl/Videos/$itemId/master.m3u8',
+      ).replace(queryParameters: query).toString();
     }
 
     final uri = Uri.parse(url);
     final query = Map<String, String>.from(uri.queryParameters);
-    if (token != null) query['api_key'] = token!;
+    query.remove('api_key');
     query['Static'] = 'true';
     // Usuwamy ALL problematyczne parametry które mogą kolidować z seekiem
     query.removeWhere(
@@ -402,18 +436,21 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   Future<void> _applyExternalSubtitles() async {
-    if (selectedSubtitleIndex == null || baseUrl == null) {
+    if (selectedSubtitleIndex == null || baseUrl == null || token == null) {
       player.setSubtitleTrack(SubtitleTrack.no());
       currentExternalSubtitlePath = null;
       notifyListeners();
       return;
     }
     final httpClient = HttpClient()
-      ..badCertificateCallback = ((cert, host, port) => true);
+      ..badCertificateCallback =
+          ServerCertificateTrust.acceptsInvalidCertificate;
     try {
-      final subUrl =
-          '$baseUrl/Videos/$itemId/$itemId/Subtitles/$selectedSubtitleIndex/0/Stream.srt?api_key=$token';
-      final request = await httpClient.getUrl(Uri.parse(subUrl));
+      final subUrl = Uri.parse(
+        '$baseUrl/Videos/$itemId/$itemId/Subtitles/$selectedSubtitleIndex/0/Stream.srt',
+      );
+      final request = await httpClient.getUrl(subUrl);
+      request.headers.set('X-Emby-Token', token!);
       final response = await request.close();
 
       if (response.statusCode == 200) {
@@ -430,7 +467,7 @@ class PlayerViewModel extends ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
-      debugPrint("Błąd pobierania napisów: $e");
+      debugPrint('Błąd pobierania napisów (${e.runtimeType}).');
     } finally {
       httpClient.close();
     }
@@ -508,17 +545,42 @@ class PlayerViewModel extends ChangeNotifier {
   void _startProgressReporting() {
     _progressTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
       if (player.state.playing) {
-        JellyfinApi().reportPlaybackProgress(
-          baseUrl: baseUrl!,
-          token: token!,
-          userId: userId!,
-          itemId: itemId,
-          position: player.state.position,
-          isPaused: false,
-          isStopped: false,
-        );
+        if (isOffline) {
+          unawaited(_recordOfflineProgress(stopped: false));
+        } else if (baseUrl != null && token != null && userId != null) {
+          JellyfinApi().reportPlaybackProgress(
+            baseUrl: baseUrl!,
+            token: token!,
+            userId: userId!,
+            itemId: itemId,
+            position: player.state.position,
+            isPaused: false,
+            isStopped: false,
+          );
+        }
       }
     });
+  }
+
+  Future<void> _recordOfflineProgress({required bool stopped}) async {
+    final currentId = itemId.isNotEmpty ? itemId : _offlineCurrentItemId();
+    if (currentId.isEmpty) return;
+    await PlaybackSyncService.instance.record(
+      itemId: currentId,
+      filePath: originalUrl,
+      position: player.state.position,
+      duration: player.state.duration,
+      stopped: stopped,
+    );
+  }
+
+  String _offlineCurrentItemId() {
+    if (_currentEpisodeIndex < 0 ||
+        _episodeItems == null ||
+        _currentEpisodeIndex >= _episodeItems!.length) {
+      return '';
+    }
+    return _episodeItems![_currentEpisodeIndex]['Id'] as String? ?? '';
   }
 
   // === Widoczność przycisków pomijania odcinków ===
@@ -614,11 +676,21 @@ class PlayerViewModel extends ChangeNotifier {
               '',
             )
             .replaceAll('_', ' ');
+        Map<String, dynamic> metadata = {};
+        final metadataFile = File('${f.path}.json');
+        if (metadataFile.existsSync()) {
+          try {
+            metadata = Map<String, dynamic>.from(
+              jsonDecode(metadataFile.readAsStringSync()) as Map,
+            );
+          } catch (_) {}
+        }
         _episodeItems!.add({
-          'Id': '',
-          'Name': title,
-          'IndexNumber': epNum,
-          'ParentIndexNumber': seasonNum,
+          ...metadata,
+          'Id': metadata['Id'] ?? '',
+          'Name': metadata['Name'] ?? title,
+          'IndexNumber': metadata['IndexNumber'] ?? epNum,
+          'ParentIndexNumber': metadata['ParentIndexNumber'] ?? seasonNum,
           'Path': f.path,
         });
 
@@ -647,6 +719,10 @@ class PlayerViewModel extends ChangeNotifier {
   Future<void> _handlePlaybackCompleted() async {
     if (_isHandlingCompletion || _isChangingEpisode) return;
     _isHandlingCompletion = true;
+
+    if (isOffline) {
+      await _recordOfflineProgress(stopped: true);
+    }
 
     final autoPlay = await StorageService().getSetting(
       'setting_autoplay',
@@ -689,16 +765,19 @@ class PlayerViewModel extends ChangeNotifier {
     if (_episodesLoaded) return;
     if (itemData == null || itemData!['Type'] != 'Episode') return;
     final httpClient = HttpClient()
-      ..badCertificateCallback = ((cert, host, port) => true);
+      ..badCertificateCallback =
+          ServerCertificateTrust.acceptsInvalidCertificate;
     try {
       final seriesId = itemData!['SeriesId'];
       if (seriesId == null) return;
 
       // Load the whole series. Keeping the query limited to the current season
       // made the next episode disappear at the season boundary.
-      final url =
-          '$baseUrl/Shows/$seriesId/Episodes?UserId=$userId&Limit=10000&api_key=$token';
-      final request = await httpClient.getUrl(Uri.parse(url));
+      final url = Uri.parse(
+        '$baseUrl/Shows/$seriesId/Episodes',
+      ).replace(queryParameters: {'UserId': '$userId', 'Limit': '10000'});
+      final request = await httpClient.getUrl(url);
+      request.headers.set('X-Emby-Token', token!);
       final response = await request.close();
 
       if (response.statusCode == 200) {
@@ -728,24 +807,74 @@ class PlayerViewModel extends ChangeNotifier {
     }
   }
 
-  void _findLocalSubtitles() {
+  Future<void> _findLocalSubtitles() async {
     try {
       final videoFile = File(originalUrl);
       final dir = videoFile.parent;
       final videoFileName = videoFile.path.split(Platform.pathSeparator).last;
+      final subtitleFiles = <File>[];
+      localSubtitleLabels.clear();
+      final metadataFile = File('${videoFile.path}.json');
+      if (await metadataFile.exists()) {
+        try {
+          final metadata = jsonDecode(await metadataFile.readAsString());
+          final subtitleEntries = metadata is Map
+              ? metadata['DownloadedSubtitles']
+              : null;
+          if (subtitleEntries is List) {
+            for (final entry in subtitleEntries) {
+              if (entry is! Map || entry['Path'] is! String) continue;
+              final relativePath = (entry['Path'] as String).replaceAll(
+                '/',
+                Platform.pathSeparator,
+              );
+              final subtitleFile = File('${dir.path}/$relativePath');
+              if (await subtitleFile.exists() &&
+                  await subtitleFile.length() > 0) {
+                subtitleFiles.add(subtitleFile);
+                localSubtitleLabels[subtitleFile.path] =
+                    _subtitleLabelFromMetadata(entry, subtitleFile);
+              }
+            }
+          }
+        } catch (error) {
+          debugPrint('Nie udało się odczytać listy napisów offline: $error');
+        }
+      }
 
-      // Zabezpieczenie: usuwamy końcówkę .mp4 (niezależnie od wielkości liter) lub odcinamy parametry po '_'
-      final baseName = videoFileName.contains('_')
-          ? videoFileName.substring(0, videoFileName.lastIndexOf('_'))
-          : videoFileName.replaceAll(
-              RegExp(r'\.mp4$', caseSensitive: false),
-              '',
-            );
-
-      localSubtitleFiles = dir.listSync().whereType<File>().where((f) {
-        final name = f.path.split(Platform.pathSeparator).last;
-        return name.startsWith(baseName) && name.endsWith('.srt');
-      }).toList();
+      // Zgodność ze starszymi pobraniami, które zapisywały SRT obok filmu.
+      if (subtitleFiles.isEmpty) {
+        final videoStem = videoFileName.replaceFirst(RegExp(r'\.[^.]+$'), '');
+        final episodeSubtitleDir = Directory(
+          '${dir.path}/$videoStem.subtitles',
+        );
+        if (await episodeSubtitleDir.exists()) {
+          subtitleFiles.addAll(
+            episodeSubtitleDir.listSync().whereType<File>().where(
+              (file) => RegExp(
+                r'\.(srt|ass|ssa|vtt|smi|ttml)$',
+                caseSensitive: false,
+              ).hasMatch(file.path),
+            ),
+          );
+        }
+        if (subtitleFiles.isEmpty) {
+          subtitleFiles.addAll(
+            dir.listSync().whereType<File>().where((file) {
+              final name = file.path.split(Platform.pathSeparator).last;
+              return name.startsWith(videoStem) &&
+                  name.toLowerCase().endsWith('.srt');
+            }),
+          );
+        }
+      }
+      for (final subtitleFile in subtitleFiles) {
+        localSubtitleLabels.putIfAbsent(
+          subtitleFile.path,
+          () => _subtitleFileLabel(subtitleFile),
+        );
+      }
+      localSubtitleFiles = subtitleFiles;
 
       if (localSubtitleFiles.isNotEmpty &&
           currentExternalSubtitlePath == null) {
@@ -757,6 +886,32 @@ class PlayerViewModel extends ChangeNotifier {
     } catch (e) {
       debugPrint("Błąd szukania lokalnych napisów: $e");
     }
+  }
+
+  String localSubtitleLabel(File file) =>
+      localSubtitleLabels[file.path] ?? _subtitleFileLabel(file);
+
+  String _subtitleLabelFromMetadata(dynamic entry, File file) {
+    final title = (entry['DisplayTitle'] ?? '').toString().trim();
+    final language = (entry['Language'] ?? '').toString().trim();
+    final codec = (entry['Codec'] ?? '').toString().trim().toUpperCase();
+
+    if (title.isNotEmpty &&
+        (language.isEmpty ||
+            title.toLowerCase().contains(language.toLowerCase()))) {
+      return title;
+    }
+    if (title.isNotEmpty && language.isNotEmpty) return '$language — $title';
+    if (title.isNotEmpty) return title;
+    if (language.isNotEmpty && codec.isNotEmpty) return '$language ($codec)';
+    if (language.isNotEmpty) return language;
+    return _subtitleFileLabel(file);
+  }
+
+  String _subtitleFileLabel(File file) {
+    final fileName = file.uri.pathSegments.last;
+    final withoutExtension = fileName.replaceFirst(RegExp(r'\.[^.]+$'), '');
+    return withoutExtension.replaceAll('_', ' ').trim();
   }
 
   void _setError(String msg) {
@@ -784,6 +939,8 @@ class PlayerViewModel extends ChangeNotifier {
         isPaused: false,
         isStopped: true,
       );
+    } else if (isOffline) {
+      unawaited(_recordOfflineProgress(stopped: true));
     }
 
     // UBIJAMY sesję tylko wtedy, gdy UŻYTKOWNIK WYCHODZI Z ODTWARZACZA

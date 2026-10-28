@@ -11,6 +11,7 @@ class MediaGridCard extends StatelessWidget {
   final double? progress;
   final bool? isWatched;
   final int? unplayedCount;
+  final Widget? topLeftAction;
 
   const MediaGridCard({
     super.key,
@@ -24,6 +25,7 @@ class MediaGridCard extends StatelessWidget {
     this.progress,
     this.isWatched,
     this.unplayedCount,
+    this.topLeftAction,
   });
 
   @override
@@ -90,6 +92,9 @@ class MediaGridCard extends StatelessWidget {
                     child: Icon(badgeIcon, color: Colors.white70, size: 14),
                   ),
                 ),
+
+              if (topLeftAction != null)
+                Positioned(top: 4, left: 4, child: topLeftAction!),
 
               if (isSelected)
                 Container(

@@ -100,6 +100,7 @@ class _LibrarySelectorScreenState extends State<LibrarySelectorScreen> {
         widget.baseUrl,
         widget.token,
         widget.userId,
+        parentId: lib.id,
       );
       final latest = await api.fetchLatestItems(
         widget.baseUrl,
