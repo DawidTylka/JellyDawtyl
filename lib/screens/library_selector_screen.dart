@@ -163,7 +163,6 @@ class _LibrarySelectorScreenState extends State<LibrarySelectorScreen> {
           userId: widget.userId,
           onRefresh: _refreshSelectorData,
           showShowAllButton: false,
-          useSeriesImages: true,
         ),
         
         const SizedBox(height: 20),
@@ -188,7 +187,6 @@ class _LibrarySelectorScreenState extends State<LibrarySelectorScreen> {
           userId: widget.userId,
           onRefresh: _refreshSelectorData,
           showShowAllButton: false,
-          useSeriesImages: true,
         ),
         
         const SizedBox(height: 20),

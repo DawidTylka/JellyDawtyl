@@ -4,43 +4,57 @@ import 'package:flutter_application_1/widgets/item_artwork.dart';
 
 void main() {
   const base = 'https://jf.example';
+  String url(String id, String type) =>
+      '$base/Items/$id/Images/$type?quality=90';
+  ArtworkCandidate poster(String id) =>
+      ArtworkCandidate(url(id, 'Primary'), portrait: true);
+  ArtworkCandidate wide(String id, String type) =>
+      ArtworkCandidate(url(id, type), portrait: false);
 
-  test('episode prefers season poster, then series poster, then own still', () {
-    final episode = Movie.fromJson({
-      'Id': 'ep',
-      'Name': 'Pilot',
-      'Type': 'Episode',
-      'SeriesId': 'show',
-      'SeasonId': 'season1',
-    });
+  final episode = Movie.fromJson({
+    'Id': 'ep',
+    'Name': 'Pilot',
+    'Type': 'Episode',
+    'SeriesId': 'show',
+    'SeasonId': 'season1',
+  });
 
-    expect(itemArtworkUrls(episode, base, imageType: 'Backdrop'), [
-      '$base/Items/season1/Images/Primary?quality=90',
-      '$base/Items/show/Images/Primary?quality=90',
-      '$base/Items/ep/Images/Primary?quality=90',
+  test('episode in a landscape card prefers landscape season/series art', () {
+    expect(itemArtworkCandidates(episode, base, landscape: true), [
+      wide('season1', 'Thumb'),
+      wide('show', 'Thumb'),
+      wide('show', 'Backdrop'),
+      poster('season1'),
+      poster('show'),
+      wide('ep', 'Primary'),
     ]);
   });
 
-  test('episode without season id falls back to series poster', () {
-    final episode = Movie.fromJson({
+  test('episode in a portrait card uses season, then series poster', () {
+    expect(itemArtworkCandidates(episode, base), [
+      poster('season1'),
+      poster('show'),
+      wide('ep', 'Primary'),
+    ]);
+  });
+
+  test('episode without season id starts with the series', () {
+    final noSeason = Movie.fromJson({
       'Id': 'ep',
       'Name': 'Pilot',
       'Type': 'Episode',
       'SeriesId': 'show',
     });
-
-    expect(
-      itemArtworkUrls(episode, base).first,
-      '$base/Items/show/Images/Primary?quality=90',
-    );
+    expect(itemArtworkCandidates(noSeason, base).first, poster('show'));
   });
 
-  test('movie uses its own image of the requested type', () {
+  test('movie uses its own art matched to the card shape', () {
     final movie = Movie.fromJson({'Id': 'm', 'Name': 'Film', 'Type': 'Movie'});
-
-    expect(
-      itemArtworkUrls(movie, base, imageType: 'Backdrop', preferSeries: true),
-      ['$base/Items/m/Images/Backdrop?quality=90'],
-    );
+    expect(itemArtworkCandidates(movie, base, landscape: true), [
+      wide('m', 'Thumb'),
+      wide('m', 'Backdrop'),
+      poster('m'),
+    ]);
+    expect(itemArtworkCandidates(movie, base), [poster('m')]);
   });
 }

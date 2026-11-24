@@ -16,7 +16,6 @@ class JellyfinSection extends StatelessWidget {
   final VoidCallback? onRefresh;
   final double aspectRatio;
   final bool showShowAllButton;
-  final bool useSeriesImages;
 
   const JellyfinSection({
     super.key,
@@ -28,7 +27,6 @@ class JellyfinSection extends StatelessWidget {
     this.onRefresh,
     this.aspectRatio = 2 / 3,
     this.showShowAllButton = true,
-    this.useSeriesImages = false,
   });
 
   double _getCardWidth(double width) {
@@ -169,11 +167,6 @@ class JellyfinSection extends StatelessWidget {
                                 item: item,
                                 baseUrl: cleanUrl,
                                 token: token,
-                                imageType:
-                                    useSeriesImages && aspectRatio > 1.2
-                                    ? "Backdrop"
-                                    : "Primary",
-                                preferSeries: useSeriesImages,
                                 landscape: aspectRatio > 1.2,
                                 placeholder: (context) =>
                                     Container(color: Colors.grey[900]),

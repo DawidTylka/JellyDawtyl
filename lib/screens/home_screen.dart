@@ -55,7 +55,6 @@ class HomeScreen extends StatelessWidget {
                             userId: userId,
                             aspectRatio: 16 / 9,
                             showShowAllButton: false,
-                            useSeriesImages: true,
                           ),
                         JellyfinSection(
                           title: l10n.lasttlyAdded,

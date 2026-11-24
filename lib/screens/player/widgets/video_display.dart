@@ -18,18 +18,71 @@ class PlayerVideoDisplay extends StatelessWidget {
     required this.onSettingsPressed,
   });
 
+  // ListenableBuilder odświeża tylko przycisk, gdy lista odcinków się wczyta.
+  // Bez poprzedniego/następnego odcinka (np. film) przycisk znika, ale
+  // zostawia miejsce, żeby odtwórz/pauza był zawsze na środku.
+  Widget _episodeButton({
+    required IconData icon,
+    required String tooltip,
+    required bool Function() isEnabled,
+    required Future<void> Function() onPressed,
+  }) {
+    return ListenableBuilder(
+      listenable: viewModel,
+      builder: (context, _) {
+        final enabled = isEnabled();
+        return Visibility(
+          visible: enabled,
+          maintainSize: true,
+          maintainAnimation: true,
+          maintainState: true,
+          child: IconButton(
+            icon: Icon(icon, color: Colors.white, size: 40),
+            tooltip: tooltip,
+            onPressed: enabled ? () => onPressed() : null,
+          ),
+        );
+      },
+    );
+  }
+
   // Wydzielony design górnego paska dla przejrzystości
   MaterialVideoControlsThemeData _buildControlsTheme() {
     return MaterialVideoControlsThemeData(
-      topButtonBarMargin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      topButtonBarMargin: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 8,
+      ),
       seekBarMargin: const EdgeInsets.only(left: 16, right: 16, bottom: 52.0),
-      seekBarHeight: 4.0,          // grubsza linia
+      seekBarHeight: 4.0, // grubsza linia
       seekBarContainerHeight: 40.0, // większy obszar dotyku
-      seekBarThumbSize: 16.0,      // większy uchwyt
+      seekBarThumbSize: 16.0, // większy uchwyt
       seekBarColor: Colors.white,
       seekBarBufferColor: Colors.greenAccent,
       seekBarPositionColor: Colors.deepPurple,
       seekBarThumbColor: Colors.deepPurple,
+      // Poprzedni / odtwórz-pauza / następny na środku ekranu, jak w
+      // typowych odtwarzaczach. Wbudowane przyciski media_kit działają tylko
+      // dla playlist, więc odcinki obsługują własne.
+      primaryButtonBar: [
+        const Spacer(flex: 2),
+        _episodeButton(
+          icon: Icons.skip_previous,
+          tooltip: 'Poprzedni odcinek',
+          isEnabled: () => viewModel.hasPreviousEpisode,
+          onPressed: viewModel.skipToPrevious,
+        ),
+        const Spacer(),
+        const MaterialPlayOrPauseButton(iconSize: 56.0),
+        const Spacer(),
+        _episodeButton(
+          icon: Icons.skip_next,
+          tooltip: 'Następny odcinek',
+          isEnabled: () => viewModel.hasNextEpisode,
+          onPressed: viewModel.skipToNext,
+        ),
+        const Spacer(flex: 2),
+      ],
       topButtonBar: [
         const BackButton(color: Colors.white),
         const SizedBox(width: 8),
@@ -46,37 +99,12 @@ class PlayerVideoDisplay extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        // ListenableBuilder odświeża tylko przyciski, reszta paska pozostaje nietknięta
-        ListenableBuilder(
-          listenable: viewModel,
-          builder: (context, _) {
-            return Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: Icon(
-                    Icons.skip_previous,
-                    color: viewModel.hasPreviousEpisode ? Colors.white : Colors.white38,
-                    size: 28,
-                  ),
-                  tooltip: 'Poprzedni odcinek',
-                  onPressed: viewModel.hasPreviousEpisode ? () => viewModel.skipToPrevious() : null,
-                ),
-                IconButton(
-                  icon: Icon(
-                    Icons.skip_next,
-                    color: viewModel.hasNextEpisode ? Colors.white : Colors.white38,
-                    size: 28,
-                  ),
-                  tooltip: 'Następny odcinek',
-                  onPressed: viewModel.hasNextEpisode ? () => viewModel.skipToNext() : null,
-                ),
-              ],
-            );
-          },
-        ),
         IconButton(
-          icon: const Icon(Icons.picture_in_picture_alt, color: Colors.white, size: 28),
+          icon: const Icon(
+            Icons.picture_in_picture_alt,
+            color: Colors.white,
+            size: 28,
+          ),
           onPressed: () {
             SimplePip().enterPipMode();
           },
@@ -101,21 +129,20 @@ class PlayerVideoDisplay extends StatelessWidget {
           controls: NoVideoControls,
           fit: BoxFit.contain,
           subtitleViewConfiguration: const SubtitleViewConfiguration(
-            visible: false, 
+            visible: false,
             padding: EdgeInsets.zero,
           ),
         );
       },
-      
+
       // 2. WIDOK NORMALNY (Pełny ekran)
       builder: (context) {
         // LayoutBuilder pozwala nam reagować na drastyczne zmiany rozmiaru okna w czasie rzeczywistym
         return LayoutBuilder(
           builder: (context, constraints) {
-            
-            // MAGICZNY WARUNEK: Jeśli wysokość okna spada poniżej 250px 
-            // (np. podczas animacji minimalizowania do PiP), natychmiast wywalamy 
-            // cały interfejs z przyciskami. Dzięki temu Flutter nie ma na czym 
+            // MAGICZNY WARUNEK: Jeśli wysokość okna spada poniżej 250px
+            // (np. podczas animacji minimalizowania do PiP), natychmiast wywalamy
+            // cały interfejs z przyciskami. Dzięki temu Flutter nie ma na czym
             // wywalić błędu "bottom overflowed".
             if (constraints.maxHeight < 250 || constraints.maxWidth < 250) {
               return Video(
@@ -124,7 +151,7 @@ class PlayerVideoDisplay extends StatelessWidget {
                 controls: NoVideoControls,
                 fit: BoxFit.contain,
                 subtitleViewConfiguration: const SubtitleViewConfiguration(
-                  visible: false, 
+                  visible: false,
                   padding: EdgeInsets.zero,
                 ),
               );
@@ -139,8 +166,7 @@ class PlayerVideoDisplay extends StatelessWidget {
                   fullscreen: _buildControlsTheme(),
                   child: Video(
                     controller: viewModel.controller,
-                    pauseUponEnteringBackgroundMode:
-                        !backgroundPlaybackEnabled,
+                    pauseUponEnteringBackgroundMode: !backgroundPlaybackEnabled,
                     controls: MaterialVideoControls,
                     fit: BoxFit.contain,
                     subtitleViewConfiguration: const SubtitleViewConfiguration(
@@ -158,8 +184,12 @@ class PlayerVideoDisplay extends StatelessWidget {
                       child: GestureDetector(
                         behavior: HitTestBehavior.translucent,
                         onDoubleTap: () {
-                          final target = viewModel.player.state.position - const Duration(seconds: 10);
-                          viewModel.player.seek(target < Duration.zero ? Duration.zero : target);
+                          final target =
+                              viewModel.player.state.position -
+                              const Duration(seconds: 10);
+                          viewModel.player.seek(
+                            target < Duration.zero ? Duration.zero : target,
+                          );
                         },
                       ),
                     ),
@@ -167,9 +197,13 @@ class PlayerVideoDisplay extends StatelessWidget {
                       child: GestureDetector(
                         behavior: HitTestBehavior.translucent,
                         onDoubleTap: () {
-                          final target = viewModel.player.state.position + const Duration(seconds: 10);
+                          final target =
+                              viewModel.player.state.position +
+                              const Duration(seconds: 10);
                           final total = viewModel.player.state.duration;
-                          viewModel.player.seek(target > total ? total : target);
+                          viewModel.player.seek(
+                            target > total ? total : target,
+                          );
                         },
                       ),
                     ),
