@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../screens/details_screen.dart';
 import '../screens/series_details_screen.dart';
 import '../screens/category_items_screen.dart';
 import '../models/jellyfin_item.dart';
 import 'desktop_horizontal_list_view.dart';
 import 'favorite_button.dart';
-import '../utils/jellyfin_auth.dart';
+import 'item_artwork.dart';
 
 class JellyfinSection extends StatelessWidget {
   final String title;
@@ -109,18 +108,6 @@ class JellyfinSection extends StatelessWidget {
           itemBuilder: (context, index) {
             final item = items[index];
 
-            String imageTag = "Primary";
-            String itemId = item.id;
-            if (useSeriesImages) {
-              itemId = item.seriesId ?? item.id;
-              if (aspectRatio > 1.2) {
-                imageTag = "Backdrop";
-              }
-            }
-
-            final imageUrl =
-                "$cleanUrl/Items/$itemId/Images/$imageTag?quality=90";
-
             final num? positionTicks = item.userData?.playbackPositionTicks;
             final num? runTimeTicks = item.runTimeTicks;
             final bool isPlayed = item.userData?.played ?? false;
@@ -178,13 +165,19 @@ class JellyfinSection extends StatelessWidget {
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              CachedNetworkImage(
-                                imageUrl: imageUrl,
-                                httpHeaders: jellyfinAuthHeaders(token),
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) =>
+                              ItemArtwork(
+                                item: item,
+                                baseUrl: cleanUrl,
+                                token: token,
+                                imageType:
+                                    useSeriesImages && aspectRatio > 1.2
+                                    ? "Backdrop"
+                                    : "Primary",
+                                preferSeries: useSeriesImages,
+                                landscape: aspectRatio > 1.2,
+                                placeholder: (context) =>
                                     Container(color: Colors.grey[900]),
-                                errorWidget: (context, url, error) => Container(
+                                error: (context) => Container(
                                   color: Colors.grey[800],
                                   child: const Icon(
                                     Icons.play_circle_outline,

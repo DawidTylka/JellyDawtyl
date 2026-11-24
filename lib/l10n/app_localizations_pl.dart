@@ -39,6 +39,9 @@ class AppLocalizationsPl extends AppLocalizations {
   String get categories => 'Kategorie';
 
   @override
+  String get goToSeries => 'Przejdź do serialu';
+
+  @override
   String get continueWatching => 'Kontynuuj oglądanie';
 
   @override

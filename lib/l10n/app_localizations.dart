@@ -158,6 +158,12 @@ abstract class AppLocalizations {
   /// **'Kategorie'**
   String get categories;
 
+  /// No description provided for @goToSeries.
+  ///
+  /// In pl, this message translates to:
+  /// **'Przejdź do serialu'**
+  String get goToSeries;
+
   /// No description provided for @continueWatching.
   ///
   /// In pl, this message translates to:

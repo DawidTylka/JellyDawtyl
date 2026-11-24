@@ -9,6 +9,8 @@ import '../services/jellyfin_api.dart';
 import '../widgets/ad_banner_widget.dart';
 import '../utils/html_description.dart';
 import '../utils/jellyfin_auth.dart';
+import '../models/movie.dart';
+import 'series_details_screen.dart';
 
 class DetailsScreen extends StatefulWidget {
   final JellyfinItem item;
@@ -153,6 +155,24 @@ class _DetailsScreenState extends State<DetailsScreen> {
     );
   }
 
+  void _openSeries() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SeriesDetailsScreen(
+          series: Movie(
+            id: widget.item.seriesId!,
+            name: widget.item.seriesName ?? '',
+            type: 'Series',
+          ),
+          baseUrl: widget.baseUrl,
+          token: widget.token,
+          userId: widget.userId,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final downloadService = DownloadService();
@@ -280,6 +300,22 @@ class _DetailsScreenState extends State<DetailsScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                  if (isEpisode && widget.item.seriesId != null) ...[
+                    const SizedBox(height: 4),
+                    TextButton.icon(
+                      onPressed: _openSeries,
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        foregroundColor: Colors.deepPurpleAccent,
+                      ),
+                      icon: const Icon(Icons.tv, size: 18),
+                      label: Text(
+                        widget.item.seriesName != null
+                            ? "${l10n.goToSeries}: ${widget.item.seriesName}"
+                            : l10n.goToSeries,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   Text(
                     description.isEmpty ? l10n.noDescription : description,

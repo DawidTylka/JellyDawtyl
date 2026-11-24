@@ -30,6 +30,7 @@ abstract class JellyfinItem {
   final int? parentIndexNumber;
   final String? seriesName;
   final String? seriesId;
+  final String? seasonId;
   final int? runTimeTicks;
   final UserData? userData;
 
@@ -42,6 +43,7 @@ abstract class JellyfinItem {
     this.parentIndexNumber,
     this.seriesName,
     this.seriesId,
+    this.seasonId,
     this.runTimeTicks,
     this.userData,
   });

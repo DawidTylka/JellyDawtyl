@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../l10n/app_localizations.dart';
 import '../models/jellyfin_item.dart';
 import 'series_details_screen.dart';
 import 'details_screen.dart';
 import '../widgets/ad_banner_widget.dart';
 import '../widgets/favorite_button.dart';
-import '../utils/jellyfin_auth.dart';
+import '../widgets/item_artwork.dart';
 
 class CategoryItemsScreen extends StatefulWidget {
   final List<JellyfinItem> items;
@@ -132,12 +131,14 @@ class _CategoryItemsScreenState extends State<CategoryItemsScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  CachedNetworkImage(
-                    imageUrl:
-                        "${widget.baseUrl}/Items/${movie.id}/Images/Primary?quality=50&fillWidth=200",
-                    httpHeaders: jellyfinAuthHeaders(widget.token),
-                    fit: BoxFit.cover,
-                    errorWidget: (context, url, error) => Container(
+                  ItemArtwork(
+                    item: movie,
+                    baseUrl: widget.baseUrl,
+                    token: widget.token,
+                    query: 'quality=50&fillWidth=200',
+                    placeholder: (context) =>
+                        Container(color: Colors.grey[900]),
+                    error: (context) => Container(
                       color: Colors.grey[800],
                       child: const Icon(
                         Icons.movie,

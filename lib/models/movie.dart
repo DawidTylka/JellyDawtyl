@@ -10,6 +10,7 @@ class Movie extends JellyfinItem {
     super.parentIndexNumber,
     super.seriesName,
     super.seriesId,
+    super.seasonId,
     super.runTimeTicks,
     super.userData,
   });
@@ -24,6 +25,7 @@ class Movie extends JellyfinItem {
       parentIndexNumber: json['ParentIndexNumber'],
       seriesName: json['SeriesName'],
       seriesId: json['SeriesId'],
+      seasonId: json['SeasonId'],
       runTimeTicks: json['RunTimeTicks'],
       userData: json['UserData'] != null ? UserData.fromJson(json['UserData']) : null,
     );

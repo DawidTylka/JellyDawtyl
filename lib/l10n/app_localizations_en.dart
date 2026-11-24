@@ -39,6 +39,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get categories => 'Categories';
 
   @override
+  String get goToSeries => 'Go to series';
+
+  @override
   String get continueWatching => 'Continue Watching';
 
   @override

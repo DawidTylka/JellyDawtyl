@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 class MediaGridCard extends StatelessWidget {
   final String title;
   final ImageProvider? imageProvider;
+  final Widget? image;
   final IconData fallbackIcon;
   final IconData? badgeIcon;
   final bool isSelected;
@@ -17,6 +18,7 @@ class MediaGridCard extends StatelessWidget {
     super.key,
     required this.title,
     this.imageProvider,
+    this.image,
     this.fallbackIcon = Icons.movie,
     this.badgeIcon,
     this.isSelected = false,
@@ -40,7 +42,9 @@ class MediaGridCard extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              if (imageProvider != null)
+              if (image != null)
+                image!
+              else if (imageProvider != null)
                 Image(
                   image: imageProvider!,
                   fit: BoxFit.cover,

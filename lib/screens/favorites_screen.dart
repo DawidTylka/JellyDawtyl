@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../models/movie.dart';
 import '../services/jellyfin_api.dart';
 import '../widgets/ad_banner_widget.dart';
@@ -9,7 +8,7 @@ import '../screens/series_details_screen.dart';
 import '../widgets/responsive_grid_layout.dart';
 import '../widgets/media_grid_card.dart';
 import '../widgets/favorite_button.dart';
-import '../utils/jellyfin_auth.dart';
+import '../widgets/item_artwork.dart';
 
 class FavoriteScreen extends StatefulWidget {
   final String baseUrl;
@@ -117,9 +116,6 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
               itemCount: _favorites.length,
               itemBuilder: (context, index) {
                 final item = _favorites[index];
-                final imageUrl =
-                    "${widget.baseUrl}/Items/${item.id}/Images/Primary?quality=90";
-
                 final num? positionTicks = item.userData?.playbackPositionTicks;
                 final num? runTimeTicks = item.runTimeTicks;
                 final bool isPlayed = item.userData?.played ?? false;
@@ -135,9 +131,20 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
 
                 return MediaGridCard(
                   title: item.name,
-                  imageProvider: CachedNetworkImageProvider(
-                    imageUrl,
-                    headers: jellyfinAuthHeaders(widget.token),
+                  image: ItemArtwork(
+                    item: item,
+                    baseUrl: widget.baseUrl,
+                    token: widget.token,
+                    placeholder: (context) =>
+                        Container(color: Colors.grey[900]),
+                    error: (context) => Container(
+                      color: Colors.grey[800],
+                      child: const Icon(
+                        Icons.movie,
+                        color: Colors.white30,
+                        size: 40,
+                      ),
+                    ),
                   ),
                   badgeIcon: item.type == 'Series'
                       ? Icons.tv

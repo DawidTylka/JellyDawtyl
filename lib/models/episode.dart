@@ -9,6 +9,7 @@ class Episode extends JellyfinItem {
     required super.parentIndexNumber,
     super.seriesName,
     super.seriesId,
+    super.seasonId,
     super.runTimeTicks,
     super.userData,
   }) : super(type: "Episode");
@@ -22,6 +23,7 @@ class Episode extends JellyfinItem {
       parentIndexNumber: json['ParentIndexNumber'] ?? 0,
       seriesName: json['SeriesName'],
       seriesId: json['SeriesId'],
+      seasonId: json['SeasonId'],
       runTimeTicks: json['RunTimeTicks'],
       userData: json['UserData'] != null ? UserData.fromJson(json['UserData']) : null,
     );
