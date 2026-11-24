@@ -170,6 +170,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               () async {
                 for (final entity in selectedEntities) {
                   try {
+                    // Stop a transfer into this file or folder first, or
+                    // the background sync would download it again.
+                    await DownloadService().cancelDownloadsInPath(entity.path);
                     if (entity.existsSync()) {
                       await entity.delete(recursive: true);
                     }

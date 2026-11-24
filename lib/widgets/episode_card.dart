@@ -4,6 +4,7 @@ import 'dart:io';
 import '../models/episode.dart';
 import 'favorite_button.dart';
 import '../utils/html_description.dart';
+import '../utils/jellyfin_auth.dart';
 
 class EpisodeCard extends StatelessWidget {
   final Episode episode;
@@ -79,7 +80,7 @@ class EpisodeCard extends StatelessWidget {
                         ? _imageFallback()
                         : CachedNetworkImage(
                             imageUrl: imageUrl,
-                            httpHeaders: {"X-Emby-Token": token},
+                            httpHeaders: jellyfinAuthHeaders(token),
                             width: 140,
                             height: 90,
                             fit: BoxFit.cover,

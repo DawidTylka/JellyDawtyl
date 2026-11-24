@@ -13,6 +13,7 @@ import 'screens/downloads_screen.dart';
 import 'services/download_service.dart';
 import 'services/playback_sync_service.dart';
 import 'services/server_certificate_trust.dart';
+import 'utils/server_url.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import '../l10n/app_localizations.dart';
@@ -678,8 +679,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _handleLogin() async {
     setState(() => _isLoading = true);
+    final serverUrl = normalizeServerUrl(_urlController.text);
     final result = await _api.login(
-      _urlController.text,
+      serverUrl,
       _userController.text,
       _passController.text,
     );
@@ -687,13 +689,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (result != null) {
       await StorageService().saveCredentials(
-        _urlController.text,
+        serverUrl,
         result['AccessToken'],
         result['User']['Id'],
       );
       PlaybackSyncService.instance.onCredentialsChanged();
       final libs = await _api.fetchUserLibraries(
-        _urlController.text,
+        serverUrl,
         result['AccessToken'],
         result['User']['Id'],
       );
@@ -704,7 +706,7 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(
           builder: (context) => LibrarySelectorScreen(
             libraries: libs,
-            baseUrl: _urlController.text,
+            baseUrl: serverUrl,
             token: result['AccessToken'],
             userId: result['User']['Id'],
           ),

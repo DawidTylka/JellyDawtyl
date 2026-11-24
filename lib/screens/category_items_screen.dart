@@ -6,6 +6,7 @@ import 'series_details_screen.dart';
 import 'details_screen.dart';
 import '../widgets/ad_banner_widget.dart';
 import '../widgets/favorite_button.dart';
+import '../utils/jellyfin_auth.dart';
 
 class CategoryItemsScreen extends StatefulWidget {
   final List<JellyfinItem> items;
@@ -134,7 +135,7 @@ class _CategoryItemsScreenState extends State<CategoryItemsScreen> {
                   CachedNetworkImage(
                     imageUrl:
                         "${widget.baseUrl}/Items/${movie.id}/Images/Primary?quality=50&fillWidth=200",
-                    httpHeaders: {"X-Emby-Token": widget.token},
+                    httpHeaders: jellyfinAuthHeaders(widget.token),
                     fit: BoxFit.cover,
                     errorWidget: (context, url, error) => Container(
                       color: Colors.grey[800],

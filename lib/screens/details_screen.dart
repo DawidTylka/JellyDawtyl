@@ -8,6 +8,7 @@ import 'package:dio/dio.dart';
 import '../services/jellyfin_api.dart';
 import '../widgets/ad_banner_widget.dart';
 import '../utils/html_description.dart';
+import '../utils/jellyfin_auth.dart';
 
 class DetailsScreen extends StatefulWidget {
   final JellyfinItem item;
@@ -63,8 +64,9 @@ class _DetailsScreenState extends State<DetailsScreen> {
     try {
       final dio = Dio();
       final response = await dio.get(
-        "${widget.baseUrl}/Users/${widget.userId}/Items/${widget.item.id}",
-        options: Options(headers: {"X-Emby-Token": widget.token}),
+        "${widget.baseUrl}/Items/${widget.item.id}",
+        queryParameters: {"UserId": widget.userId},
+        options: Options(headers: jellyfinAuthHeaders(widget.token)),
       );
 
       if (response.data != null) {
@@ -216,7 +218,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
           children: [
             CachedNetworkImage(
               imageUrl: imageUrl,
-              httpHeaders: {"X-Emby-Token": widget.token},
+              httpHeaders: jellyfinAuthHeaders(widget.token),
               height: 300,
               width: double.infinity,
               fit: BoxFit.cover,
@@ -480,12 +482,25 @@ class _DetailsScreenState extends State<DetailsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          "${l10n.downloading}: ${status.progressText}",
-          style: const TextStyle(
-            color: Colors.greenAccent,
-            fontWeight: FontWeight.bold,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                "${l10n.downloading}: ${status.progressText}",
+                style: const TextStyle(
+                  color: Colors.greenAccent,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            if (!status.isDownloaded)
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.white54),
+                tooltip: 'Anuluj pobieranie',
+                onPressed: () =>
+                    DownloadService().cancelDownload(widget.item.id),
+              ),
+          ],
         ),
         const SizedBox(height: 8),
         LinearProgressIndicator(

@@ -14,6 +14,7 @@ import '../../../services/storage_service.dart';
 import '../../../services/playback_sync_service.dart';
 import '../../../services/server_certificate_trust.dart';
 import '../../../main.dart'; // Tu znajduje się globalny audioHandler
+import '../../utils/jellyfin_auth.dart';
 
 class PlayerViewModel extends ChangeNotifier {
   // === Parametry Wejściowe ===
@@ -131,7 +132,7 @@ class PlayerViewModel extends ChangeNotifier {
           ? File(originalUrl).absolute.path
           : _buildCompatibleUrl(originalUrl);
 
-      final headers = token != null ? {'X-Emby-Token': token!} : null;
+      final headers = token != null ? jellyfinAuthHeaders(token!) : null;
 
       _setupPlayerListeners();
 
@@ -159,7 +160,7 @@ class PlayerViewModel extends ChangeNotifier {
       final request = await client.getUrl(
         Uri.parse('$baseUrl/Items/$itemId/Images/Primary'),
       );
-      request.headers.set('X-Emby-Token', token!);
+      request.headers.set('Authorization', jellyfinAuthorization(token!));
       final response = await request.close().timeout(
         const Duration(seconds: 5),
       );
@@ -288,7 +289,7 @@ class PlayerViewModel extends ChangeNotifier {
     notifyListeners();
 
     final newUrl = _buildCompatibleUrl(originalUrl);
-    final headers = token != null ? {'X-Emby-Token': token!} : null;
+    final headers = token != null ? jellyfinAuthHeaders(token!) : null;
 
     await player.open(Media(newUrl, httpHeaders: headers), play: true);
   }
@@ -339,9 +340,11 @@ class PlayerViewModel extends ChangeNotifier {
       ..badCertificateCallback =
           ServerCertificateTrust.acceptsInvalidCertificate;
     try {
-      final url = Uri.parse('$baseUrl/Users/$userId/Items/$itemId');
+      final url = Uri.parse(
+        '$baseUrl/Items/$itemId',
+      ).replace(queryParameters: {'UserId': '$userId'});
       final request = await httpClient.getUrl(url);
-      request.headers.set('X-Emby-Token', token!);
+      request.headers.set('Authorization', jellyfinAuthorization(token!));
       final response = await request.close();
 
       if (response.statusCode == 200) {
@@ -416,6 +419,7 @@ class PlayerViewModel extends ChangeNotifier {
     final uri = Uri.parse(url);
     final query = Map<String, String>.from(uri.queryParameters);
     query.remove('api_key');
+    query.remove('ApiKey');
     query['Static'] = 'true';
     // Usuwamy ALL problematyczne parametry które mogą kolidować z seekiem
     query.removeWhere(
@@ -450,7 +454,7 @@ class PlayerViewModel extends ChangeNotifier {
         '$baseUrl/Videos/$itemId/$itemId/Subtitles/$selectedSubtitleIndex/0/Stream.srt',
       );
       final request = await httpClient.getUrl(subUrl);
-      request.headers.set('X-Emby-Token', token!);
+      request.headers.set('Authorization', jellyfinAuthorization(token!));
       final response = await request.close();
 
       if (response.statusCode == 200) {
@@ -777,7 +781,7 @@ class PlayerViewModel extends ChangeNotifier {
         '$baseUrl/Shows/$seriesId/Episodes',
       ).replace(queryParameters: {'UserId': '$userId', 'Limit': '10000'});
       final request = await httpClient.getUrl(url);
-      request.headers.set('X-Emby-Token', token!);
+      request.headers.set('Authorization', jellyfinAuthorization(token!));
       final response = await request.close();
 
       if (response.statusCode == 200) {

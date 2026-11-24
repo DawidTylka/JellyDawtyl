@@ -6,6 +6,7 @@ import '../screens/category_items_screen.dart';
 import '../models/jellyfin_item.dart';
 import 'desktop_horizontal_list_view.dart';
 import 'favorite_button.dart';
+import '../utils/jellyfin_auth.dart';
 
 class JellyfinSection extends StatelessWidget {
   final String title;
@@ -179,7 +180,7 @@ class JellyfinSection extends StatelessWidget {
                             children: [
                               CachedNetworkImage(
                                 imageUrl: imageUrl,
-                                httpHeaders: {"X-Emby-Token": token},
+                                httpHeaders: jellyfinAuthHeaders(token),
                                 fit: BoxFit.cover,
                                 placeholder: (context, url) =>
                                     Container(color: Colors.grey[900]),

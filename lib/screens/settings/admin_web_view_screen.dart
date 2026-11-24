@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../../services/storage_service.dart';
+import '../../utils/server_url.dart';
 import '../../l10n/app_localizations.dart';
 
 class AdminWebViewScreen extends StatefulWidget {
@@ -26,7 +27,9 @@ class _AdminWebViewScreenState extends State<AdminWebViewScreen> {
   }
 
   Future<void> _checkInitialState() async {
-    final serverUrl = await _storage.getString('baseUrl') ?? '';
+    final serverUrl = normalizeServerUrl(
+      await _storage.getString('baseUrl') ?? '',
+    );
     
     if (serverUrl.isNotEmpty) {
       setState(() {

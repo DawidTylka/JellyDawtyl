@@ -6,6 +6,7 @@ import 'package:flutter_downloader/flutter_downloader.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/jellyfin_item.dart';
+import '../utils/server_url.dart';
 import 'jellyfin_api.dart';
 import 'storage_service.dart';
 
@@ -16,6 +17,7 @@ import 'android_download_task_matcher.dart';
 import 'download_task_queue.dart';
 
 import 'dart:async';
+import '../utils/jellyfin_auth.dart';
 
 class DownloadStatus {
   final double progressValue;
@@ -64,6 +66,14 @@ class DownloadService {
   bool _failuresInitialized = false;
   final Set<String> _enqueueingItemIds = {};
   final Set<String> _preparingMetadataItemIds = {};
+  // Cancellation state. Desktop transfers stop through their CancelToken;
+  // Android tasks created by a request that was in flight while the user
+  // cancelled are swept by the next background sync.
+  final Set<String> _cancelledItemIds = {};
+  final Map<String, int> _cancelGenerations = {};
+  final Map<String, CancelToken> _cancelTokens = {};
+  final Map<String, String> _desktopTargets = {};
+  final Map<String, Map<String, dynamic>> _cancelledAndroidTargets = {};
 
   Future<void> initialize() async {
     if (_failuresInitialized) return;
@@ -88,6 +98,8 @@ class DownloadService {
     String itemId,
     Map<String, dynamic> record,
   ) async {
+    // A download the user cancelled is not a failure to offer for retry.
+    if (_cancelledItemIds.contains(itemId)) return;
     final failure = {...record, 'itemId': itemId};
     final updated = failedDownloads.value
         .where((entry) => entry['itemId'] != itemId)
@@ -116,6 +128,9 @@ class DownloadService {
     await dismissFailedDownloads(ids);
     for (final record in selected) {
       final itemId = record['itemId'] as String;
+      _cancelledItemIds.remove(itemId);
+      final generation = _cancelGenerations[itemId] ?? 0;
+      bool cancelled() => (_cancelGenerations[itemId] ?? 0) != generation;
       _updateProgress(itemId, progressText: 'Ponawianie pobierania...');
       try {
         if (Platform.isAndroid) {
@@ -124,7 +139,7 @@ class DownloadService {
           await _saveBackgroundTasks();
           final taskId = await FlutterDownloader.enqueue(
             url: record['url'] as String,
-            headers: {'X-Emby-Token': record['token'] as String},
+            headers: jellyfinAuthHeaders(record['token'] as String),
             savedDir: record['saveDir'] as String,
             fileName: record['fileName'] as String,
             showNotification: record['showNotification'] as bool? ?? false,
@@ -134,6 +149,10 @@ class DownloadService {
             timeout: 120000,
           );
           if (taskId == null) throw StateError('Android nie przyjął zadania.');
+          if (cancelled()) {
+            await _cancelAndroidTask(taskId);
+            continue;
+          }
           _backgroundTasks[itemId] = {
             ...record,
             'taskId': taskId,
@@ -141,24 +160,39 @@ class DownloadService {
           };
           await _saveBackgroundTasks();
         } else {
-          final downloader = DioDownloader();
           await _downloadQueue.enqueue(itemId, () async {
-            await downloader.downloadVideo(
-              itemId: itemId,
-              downloadUrl: record['url'] as String,
-              saveDir: record['saveDir'] as String,
-              fileName: record['fileName'] as String,
-              token: record['token'] as String,
-              wifiOnly: !(record['allowCellular'] as bool? ?? false),
-              showNotification: false,
-              onProgress: (id, value, text) =>
-                  _updateProgress(id, progressValue: value, progressText: text),
-              onFinished: (id) => _finishDownload(
-                id,
-                '${record['saveDir']}/${record['fileName']}',
-              ),
-              onFailed: (id) => _registerFailedDownload(id, record),
-            );
+            if (cancelled()) return;
+            final cancelToken = CancelToken();
+            _cancelTokens[itemId] = cancelToken;
+            _desktopTargets[itemId] =
+                '${record['saveDir']}/${record['fileName']}';
+            final downloader = DioDownloader(cancelToken: cancelToken);
+            try {
+              await downloader.downloadVideo(
+                itemId: itemId,
+                downloadUrl: record['url'] as String,
+                saveDir: record['saveDir'] as String,
+                fileName: record['fileName'] as String,
+                token: record['token'] as String,
+                wifiOnly: !(record['allowCellular'] as bool? ?? false),
+                showNotification: false,
+                onProgress: (id, value, text) {
+                  if (cancelled()) return;
+                  _updateProgress(
+                    id,
+                    progressValue: value,
+                    progressText: text,
+                  );
+                },
+                onFinished: (id) => _finishDownload(
+                  id,
+                  '${record['saveDir']}/${record['fileName']}',
+                ),
+                onFailed: (id) => _registerFailedDownload(id, record),
+              );
+            } finally {
+              _releaseCancelToken(itemId, cancelToken);
+            }
           });
         }
       } catch (error) {
@@ -176,11 +210,143 @@ class DownloadService {
     }
   }
 
-  Future<BaseDownloader> _getDownloaderInstance() async {
+  Future<BaseDownloader> _getDownloaderInstance({
+    CancelToken? cancelToken,
+  }) async {
     if (Platform.isAndroid) {
       return NativeDownloader();
     } else {
-      return DioDownloader();
+      return DioDownloader(cancelToken: cancelToken);
+    }
+  }
+
+  void _releaseCancelToken(String itemId, CancelToken token) {
+    if (identical(_cancelTokens[itemId], token)) {
+      _cancelTokens.remove(itemId);
+      _desktopTargets.remove(itemId);
+    }
+  }
+
+  static bool _isActiveAndroidTask(DownloadTaskStatus status) =>
+      status == DownloadTaskStatus.enqueued ||
+      status == DownloadTaskStatus.running ||
+      status == DownloadTaskStatus.paused;
+
+  Future<void> _cancelAndroidTask(String taskId) async {
+    try {
+      await FlutterDownloader.cancel(taskId: taskId);
+    } catch (error) {
+      debugPrint('Nie udało się anulować zadania (${error.runtimeType}).');
+    }
+    try {
+      await FlutterDownloader.remove(taskId: taskId, shouldDeleteContent: true);
+    } catch (error) {
+      debugPrint('Nie udało się usunąć zadania (${error.runtimeType}).');
+    }
+  }
+
+  /// Stops a queued or running download and forgets it, so that the
+  /// background reconciliation does not start it again.
+  Future<void> cancelDownload(String itemId) async {
+    _cancelledItemIds.add(itemId);
+    _cancelGenerations[itemId] = (_cancelGenerations[itemId] ?? 0) + 1;
+    final record = _backgroundTasks.remove(itemId);
+    final preparation = _pendingMetadataPreparations.remove(itemId);
+    if (record != null) await _saveBackgroundTasks();
+    if (preparation != null) await _savePendingMetadataPreparations();
+    _cancelTokens.remove(itemId)?.cancel();
+    _desktopTargets.remove(itemId);
+
+    if (Platform.isAndroid && record != null) {
+      final saveDir = record['saveDir'] as String?;
+      final fileName = record['fileName'] as String?;
+      _cancelledAndroidTargets[itemId] = {
+        'saveDir': saveDir,
+        'fileName': fileName,
+        'until': DateTime.now()
+            .add(const Duration(minutes: 2))
+            .millisecondsSinceEpoch,
+      };
+      if (FlutterDownloader.initialized) {
+        final taskIds = <String>{};
+        final knownTaskId = record['taskId'];
+        if (knownTaskId is String) taskIds.add(knownTaskId);
+        try {
+          final tasks = await FlutterDownloader.loadTasks() ?? [];
+          for (final task in tasks) {
+            if (task.savedDir == saveDir &&
+                task.filename == fileName &&
+                _isActiveAndroidTask(task.status)) {
+              taskIds.add(task.taskId);
+            }
+          }
+        } catch (error) {
+          debugPrint('Nie udało się odczytać zadań (${error.runtimeType}).');
+        }
+        for (final taskId in taskIds) {
+          await _cancelAndroidTask(taskId);
+        }
+      }
+    }
+
+    activeDownloads.value = Map<String, DownloadStatus>.from(
+      activeDownloads.value,
+    )..remove(itemId);
+  }
+
+  /// Cancels every download whose target file is [path] or lies inside the
+  /// directory [path]. Called before the user deletes downloaded content.
+  Future<void> cancelDownloadsInPath(String path) async {
+    String normalize(String value) {
+      final unified = value
+          .replaceAll('\\', '/')
+          .replaceAll(RegExp(r'/+'), '/')
+          .replaceFirst(RegExp(r'/$'), '');
+      return Platform.isWindows ? unified.toLowerCase() : unified;
+    }
+
+    final target = normalize(path);
+    bool covers(String file) {
+      final candidate = normalize(file);
+      return candidate == target || candidate.startsWith('$target/');
+    }
+
+    final itemIds = <String>{};
+    _backgroundTasks.forEach((itemId, record) {
+      if (covers('${record['saveDir']}/${record['fileName']}')) {
+        itemIds.add(itemId);
+      }
+    });
+    _pendingMetadataPreparations.forEach((itemId, preparation) {
+      if (covers('${preparation['seriesDir']}/${preparation['fileName']}')) {
+        itemIds.add(itemId);
+      }
+    });
+    _desktopTargets.forEach((itemId, file) {
+      if (covers(file)) itemIds.add(itemId);
+    });
+    for (final itemId in itemIds) {
+      await cancelDownload(itemId);
+    }
+  }
+
+  Future<void> _cancelOrphanedAndroidTasks(List<DownloadTask> tasks) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final entry in _cancelledAndroidTargets.entries.toList()) {
+      final itemId = entry.key;
+      final target = entry.value;
+      if (_backgroundTasks.containsKey(itemId) ||
+          now > (target['until'] as int)) {
+        _cancelledAndroidTargets.remove(itemId);
+        continue;
+      }
+      for (final task in tasks) {
+        if (task.savedDir == target['saveDir'] &&
+            task.filename == target['fileName'] &&
+            _isActiveAndroidTask(task.status)) {
+          await _cancelAndroidTask(task.taskId);
+        }
+      }
     }
   }
 
@@ -252,7 +418,7 @@ class DownloadService {
         if (retryAt > DateTime.now().millisecondsSinceEpoch) continue;
         await _downloadJsonMetadata(
           itemId: itemId,
-          baseUrl: preparation['baseUrl'] as String,
+          baseUrl: normalizeServerUrl(preparation['baseUrl'] as String),
           token: preparation['token'] as String,
           userId: preparation['userId'] as String,
           seriesId: preparation['seriesId'] as String?,
@@ -314,12 +480,15 @@ class DownloadService {
     try {
       final tasks = await FlutterDownloader.loadTasks();
       if (tasks == null) return;
+      await _cancelOrphanedAndroidTasks(tasks);
       final snapshots = tasks.map(_snapshotAndroidTask).toList();
 
       for (final entry in _backgroundTasks.entries.toList()) {
         final itemId = entry.key;
         if (_enqueueingItemIds.contains(itemId)) continue;
         final record = entry.value;
+        // Skip a record the user cancelled while this pass was running.
+        if (!identical(_backgroundTasks[itemId], record)) continue;
         final taskId = record['taskId'] as String?;
         // Recover when Android accepted the job but the process died before
         // its task ID was saved. Prefer the newest active matching task.
@@ -350,7 +519,7 @@ class DownloadService {
           try {
             final newTaskId = await FlutterDownloader.enqueue(
               url: record['url'] as String,
-              headers: {'X-Emby-Token': record['token'] as String},
+              headers: jellyfinAuthHeaders(record['token'] as String),
               savedDir: record['saveDir'] as String,
               fileName: record['fileName'] as String,
               showNotification: record['showNotification'] as bool? ?? false,
@@ -359,7 +528,10 @@ class DownloadService {
               allowCellular: record['allowCellular'] as bool? ?? false,
               timeout: 120000,
             );
-            if (newTaskId == null) {
+            if (newTaskId != null &&
+                !identical(_backgroundTasks[itemId], record)) {
+              await _cancelAndroidTask(newTaskId);
+            } else if (newTaskId == null) {
               _updateProgress(
                 itemId,
                 isQueued: true,
@@ -374,11 +546,13 @@ class DownloadService {
             debugPrint(
               'Nie udało się odtworzyć zadania Android (${error.runtimeType}).',
             );
-            _updateProgress(
-              itemId,
-              isQueued: true,
-              progressText: 'Oczekiwanie na ponowienie...',
-            );
+            if (identical(_backgroundTasks[itemId], record)) {
+              _updateProgress(
+                itemId,
+                isQueued: true,
+                progressText: 'Oczekiwanie na ponowienie...',
+              );
+            }
           } finally {
             _enqueueingItemIds.remove(itemId);
           }
@@ -483,6 +657,7 @@ class DownloadService {
   }
 
   void _failBackgroundDownload(String itemId, Map<String, dynamic> record) {
+    if (_cancelledItemIds.contains(itemId)) return;
     final fullPath = '${record['saveDir']}/${record['fileName']}';
     final partial = File(fullPath);
     if (partial.existsSync()) {
@@ -559,7 +734,9 @@ class DownloadService {
     return activeDownloads.value[uniqueId] ?? DownloadStatus();
   }
 
-  Map<String, String> _generatePaths(
+  /// Names used by versions before item IDs were part of file names. They
+  /// are only used to find, and keep using, files downloaded back then.
+  Map<String, String> _generateLegacyPaths(
     JellyfinItem item,
     String? seriesOverrideName,
     String qualityLabel,
@@ -575,6 +752,57 @@ class DownloadService {
     return {"folder": safeFolder, "file": fileName};
   }
 
+  /// Keeps letters of every alphabet and removes only characters that are
+  /// not allowed in file names on Android, Windows, Linux or macOS.
+  static String _safePathLabel(String value) {
+    var label = value
+        .replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1F]'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    final runes = label.runes.toList();
+    if (runes.length > 50) label = String.fromCharCodes(runes.take(50));
+    return label
+        .replaceFirst(RegExp(r'^[. ]+'), '')
+        .replaceFirst(RegExp(r'[. ]+$'), '');
+  }
+
+  /// Paths for new downloads. The item ID in the file name keeps two items
+  /// with the same title (or a title without Latin letters) apart.
+  Map<String, String> _generatePaths(
+    JellyfinItem item,
+    String? seriesOverrideName,
+    String qualityLabel,
+  ) {
+    final bool isEpisode = item.type == "Episode";
+    final String folderBaseName =
+        seriesOverrideName ??
+        (isEpisode ? (item.seriesName ?? item.name) : item.name);
+    final label = _safePathLabel(folderBaseName);
+    final folderId = isEpisode ? (item.seriesId ?? item.id) : item.id;
+    final folder = label.isEmpty ? folderId : label;
+    final season = (item.parentIndexNumber ?? 0).toString().padLeft(3, '0');
+    final episode = (item.indexNumber ?? 0).toString().padLeft(3, '0');
+    final fileName = isEpisode
+        ? "${folder}_S${season}E${episode}_${item.id}_$qualityLabel.mp4"
+        : "${folder}_${item.id}_$qualityLabel.mp4";
+    return {"folder": folder, "file": fileName};
+  }
+
+  /// A file found under a legacy name may belong to another item with the
+  /// same title. The metadata sidecar names its item; without a readable
+  /// sidecar the file is accepted, as older versions did.
+  bool _legacyFileBelongsTo(String filePath, String itemId) {
+    final sidecar = File('$filePath.json');
+    try {
+      if (!sidecar.existsSync()) return true;
+      final decoded = jsonDecode(sidecar.readAsStringSync());
+      final id = decoded is Map ? decoded['Id'] : null;
+      return id == null || id == itemId;
+    } catch (_) {
+      return true;
+    }
+  }
+
   Future<void> startDownload({
     required JellyfinItem item,
     required String baseUrl,
@@ -588,6 +816,9 @@ class DownloadService {
     await updateConcurrencyLimit();
     final String itemId = item.id;
     if (activeDownloads.value.containsKey(itemId)) return;
+    _cancelledItemIds.remove(itemId);
+    final generation = _cancelGenerations[itemId] ?? 0;
+    bool cancelled() => (_cancelGenerations[itemId] ?? 0) != generation;
 
     _updateProgress(
       itemId,
@@ -614,9 +845,23 @@ class DownloadService {
       final String baseDir = await getDirectoryPath();
       if (baseDir.isEmpty) return;
 
+      if (cancelled()) return;
+
       final paths = _generatePaths(item, finalSeriesName, qualityLabel);
-      final String safeFolderName = paths["folder"]!;
+      final legacyPaths = _generateLegacyPaths(
+        item,
+        finalSeriesName,
+        qualityLabel,
+      );
+      String safeFolderName = paths["folder"]!;
       final String fileName = paths["file"]!;
+      // Keep new episodes next to ones downloaded under the old folder name.
+      final legacyFolder = legacyPaths["folder"]!;
+      if (legacyFolder.trim().isNotEmpty &&
+          legacyFolder != safeFolderName &&
+          Directory('$baseDir/$legacyFolder').existsSync()) {
+        safeFolderName = legacyFolder;
+      }
 
       Directory seriesDir = Directory('$baseDir/$safeFolderName');
       if (!seriesDir.existsSync()) seriesDir.createSync(recursive: true);
@@ -626,6 +871,16 @@ class DownloadService {
           await targetFile.exists() &&
           await targetFile.length() > 0) {
         _finishDownload(itemId, targetFile.path);
+        return;
+      }
+      final legacyFile = File(
+        '$baseDir/${legacyPaths["folder"]}/${legacyPaths["file"]}',
+      );
+      if (!_backgroundTasks.containsKey(itemId) &&
+          await legacyFile.exists() &&
+          await legacyFile.length() > 0 &&
+          _legacyFileBelongsTo(legacyFile.path, itemId)) {
+        _finishDownload(itemId, legacyFile.path);
         return;
       }
 
@@ -660,7 +915,10 @@ class DownloadService {
         '$baseUrl/Videos/$itemId/stream.mp4',
       ).replace(queryParameters: downloadQuery).toString();
 
-      BaseDownloader downloader = await _getDownloaderInstance();
+      final cancelToken = Platform.isAndroid ? null : CancelToken();
+      BaseDownloader downloader = await _getDownloaderInstance(
+        cancelToken: cancelToken,
+      );
 
       bool wifiOnly = await _storage.getSetting(
         'setting_wifionly',
@@ -671,6 +929,7 @@ class DownloadService {
         'setting_native_downloader',
         defaultValue: false,
       );
+      if (cancelled()) return;
       if (Platform.isAndroid) {
         _pendingMetadataPreparations[itemId] = {
           'baseUrl': baseUrl,
@@ -714,6 +973,12 @@ class DownloadService {
         );
       }
 
+      if (cancelled()) return;
+      if (cancelToken != null) {
+        _cancelTokens[itemId] = cancelToken;
+        _desktopTargets[itemId] = '${seriesDir.path}/$fileName';
+      }
+
       String? taskId;
       try {
         taskId = await downloader.downloadVideo(
@@ -724,8 +989,10 @@ class DownloadService {
           token: token,
           wifiOnly: wifiOnly,
           showNotification: showNotification,
-          onProgress: (id, val, text) =>
-              _updateProgress(id, progressValue: val, progressText: text),
+          onProgress: (id, val, text) {
+            if (cancelled()) return;
+            _updateProgress(id, progressValue: val, progressText: text);
+          },
           onFinished: (id) =>
               _finishDownload(id, "${seriesDir.path}/$fileName"),
           onFailed: (id) => _registerFailedDownload(id, {
@@ -741,6 +1008,13 @@ class DownloadService {
         );
       } finally {
         _enqueueingItemIds.remove(itemId);
+        if (cancelToken != null) _releaseCancelToken(itemId, cancelToken);
+      }
+
+      if (cancelled()) {
+        // Cancelled while the transfer was starting or running.
+        if (taskId != null) await _cancelAndroidTask(taskId);
+        return;
       }
 
       if (Platform.isAndroid) {
@@ -862,7 +1136,7 @@ class DownloadService {
         await dio.download(
           coverUrl,
           coverFile.path,
-          options: Options(headers: {"X-Emby-Token": token}),
+          options: Options(headers: jellyfinAuthHeaders(token)),
         );
         if (coverFile.existsSync() && coverFile.lengthSync() < 500) {
           coverFile.deleteSync();
@@ -882,7 +1156,7 @@ class DownloadService {
         await dio.download(
           thumbUrl,
           thumbFile.path,
-          options: Options(headers: {"X-Emby-Token": token}),
+          options: Options(headers: jellyfinAuthHeaders(token)),
         );
         if (thumbFile.existsSync() && thumbFile.lengthSync() < 500) {
           thumbFile.deleteSync();
@@ -911,8 +1185,9 @@ class DownloadService {
     Future<Map<String, dynamic>?> fetchItem(String id) async {
       try {
         final response = await dio.get(
-          '$baseUrl/Users/$userId/Items/$id',
-          options: Options(headers: {'X-Emby-Token': token}),
+          '$baseUrl/Items/$id',
+          queryParameters: {'UserId': userId},
+          options: Options(headers: jellyfinAuthHeaders(token)),
         );
         if (response.data is Map) {
           return Map<String, dynamic>.from(response.data as Map);
@@ -1068,7 +1343,7 @@ class DownloadService {
             );
             final taskId = await FlutterDownloader.enqueue(
               url: uri.toString(),
-              headers: {'X-Emby-Token': token},
+              headers: jellyfinAuthHeaders(token),
               savedDir: subtitleDir.path,
               fileName: subtitleName,
               showNotification: false,
@@ -1113,7 +1388,7 @@ class DownloadService {
           await dio.download(
             uri.toString(),
             tempFile.path,
-            options: Options(headers: {'X-Emby-Token': token}),
+            options: Options(headers: jellyfinAuthHeaders(token)),
           );
           if (await tempFile.length() == 0) {
             await tempFile.delete();
@@ -1163,11 +1438,27 @@ class DownloadService {
     const qualities = ["original", "1080p", "720p", "480p", "360p", "144p"];
     for (String q in qualities) {
       final paths = _generatePaths(item, seriesOverrideName, q);
+      final legacyPaths = _generateLegacyPaths(item, seriesOverrideName, q);
+      final candidates = <String>[
+        "${paths["folder"]}/${paths["file"]}",
+        if (legacyPaths["folder"]!.trim().isNotEmpty &&
+            legacyPaths["folder"] != paths["folder"])
+          "${legacyPaths["folder"]}/${paths["file"]}",
+      ];
+      for (final relativePath in candidates) {
+        final status = await checkStatus(item.id, relativePath);
+        if (status.isDownloaded && status.filePath != null) {
+          return status.filePath;
+        }
+      }
+      // Files downloaded by older versions keep their original names.
       final status = await checkStatus(
         item.id,
-        "${paths["folder"]}/${paths["file"]}",
+        "${legacyPaths["folder"]}/${legacyPaths["file"]}",
       );
-      if (status.isDownloaded && status.filePath != null) {
+      if (status.isDownloaded &&
+          status.filePath != null &&
+          _legacyFileBelongsTo(status.filePath!, item.id)) {
         return status.filePath;
       }
     }

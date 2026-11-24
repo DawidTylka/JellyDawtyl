@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_downloader/flutter_downloader.dart';
 
 import 'base_downloader.dart';
+import '../../utils/jellyfin_auth.dart';
 
 /// Android WorkManager-backed downloader. Tasks continue if Flutter is closed.
 class NativeDownloader implements BaseDownloader {
@@ -24,7 +25,7 @@ class NativeDownloader implements BaseDownloader {
     try {
       final taskId = await FlutterDownloader.enqueue(
         url: downloadUrl,
-        headers: {'X-Emby-Token': token},
+        headers: jellyfinAuthHeaders(token),
         savedDir: saveDir,
         fileName: fileName,
         showNotification: showNotification,

@@ -424,15 +424,37 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
                                               ),
                                             )
                                           : activeDl != null
-                                          ? Center(
-                                              child: Text(
-                                                activeDl.progressText,
-                                                style: const TextStyle(
-                                                  color: Colors.greenAccent,
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.bold,
+                                          ? Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Flexible(
+                                                  child: Text(
+                                                    activeDl.progressText,
+                                                    style: const TextStyle(
+                                                      color: Colors.greenAccent,
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
                                                 ),
-                                              ),
+                                                if (!activeDl.isDownloaded)
+                                                  IconButton(
+                                                    icon: const Icon(
+                                                      Icons.close,
+                                                      size: 18,
+                                                      color: Colors.white54,
+                                                    ),
+                                                    tooltip:
+                                                        'Anuluj pobieranie',
+                                                    onPressed: () =>
+                                                        downloadService
+                                                            .cancelDownload(
+                                                              episode.id,
+                                                            ),
+                                                  ),
+                                              ],
                                             )
                                           : TextButton.icon(
                                               onPressed: () {

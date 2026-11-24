@@ -10,6 +10,7 @@ import 'download_service.dart';
 import 'jellyfin_api.dart';
 import 'pending_playback_changes.dart';
 import 'storage_service.dart';
+import '../utils/jellyfin_auth.dart';
 
 /// Syncs offline playback up to Jellyfin and mirrors Jellyfin user data back
 /// into metadata sidecars for downloaded videos.
@@ -18,7 +19,6 @@ class PlaybackSyncService {
   static final PlaybackSyncService instance = PlaybackSyncService._();
 
   static const _storageKey = 'offline_playback_changes_v1';
-  static const _deviceIdStorageKey = 'jellyfin_socket_device_id_v1';
   static const _itemBatchSize = 50;
   static const _reconcileThrottle = Duration(seconds: 30);
 
@@ -362,11 +362,13 @@ class PlaybackSyncService {
         path: '$basePath/socket',
         queryParameters: {
           ...baseUri.queryParameters,
-          'api_key': token,
           'deviceId': deviceId,
         },
       );
-      final socket = await WebSocket.connect(socketUri.toString());
+      final socket = await WebSocket.connect(
+        socketUri.toString(),
+        headers: jellyfinAuthHeaders(token),
+      );
       if (!_isForeground) {
         await socket.close(WebSocketStatus.goingAway);
         return;
@@ -482,17 +484,7 @@ class PlaybackSyncService {
     }
   }
 
-  Future<String> _getDeviceId() async {
-    final existing = await _storage.getString(_deviceIdStorageKey);
-    if (existing != null && existing.isNotEmpty) return existing;
-    final random = Random.secure();
-    final id = List<int>.generate(
-      32,
-      (_) => random.nextInt(16),
-    ).map((digit) => digit.toRadixString(16)).join();
-    await _storage.saveString(_deviceIdStorageKey, id);
-    return id;
-  }
+  Future<String> _getDeviceId() => _storage.getDeviceId();
 
   Future<void> dispose() async {
     await _connectivitySubscription?.cancel();

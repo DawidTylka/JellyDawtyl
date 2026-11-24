@@ -3,6 +3,8 @@ import '../models/movie.dart';
 import '../models/library.dart';
 import '../models/episode.dart';
 import 'package:flutter/foundation.dart';
+import 'storage_service.dart';
+import '../utils/jellyfin_auth.dart';
 
 String _redactedNetworkError(Object error) {
   if (error is DioException) {
@@ -25,13 +27,16 @@ class JellyfinApi {
     String fullUrl = url.startsWith('http') ? url : 'https://$url';
 
     try {
+      // Jellyfin binds the issued token to DeviceId, so every installation
+      // needs its own persistent identifier. It is sent only here: sessions
+      // that already hold a token are not affected by the change.
+      final deviceId = await StorageService().getDeviceId();
       final response = await _dio.post(
         "$fullUrl/Users/AuthenticateByName",
         data: {"Username": username, "Pw": password},
         options: Options(
           headers: {
-            "X-Emby-Authorization":
-                'MediaBrowser Client="MyJellyApp", Device="Phone", DeviceId="123", Version="1.0.0"',
+            jellyfinAuthHeader: jellyfinLoginAuthorization(deviceId: deviceId),
           },
         ),
       );
@@ -51,8 +56,9 @@ class JellyfinApi {
     String fullUrl = url.startsWith('http') ? url : 'https://$url';
     try {
       final response = await _dio.get(
-        "$fullUrl/Users/$userId/Views",
-        options: Options(headers: {"X-Emby-Token": token}),
+        "$fullUrl/UserViews",
+        queryParameters: {"UserId": userId},
+        options: Options(headers: jellyfinAuthHeaders(token)),
       );
       final List data = response.data['Items'] ?? [];
       return data
@@ -89,16 +95,16 @@ class JellyfinApi {
     String fullUrl = url.startsWith('http') ? url : 'https://$url';
     try {
       final response = await _dio.get(
-        "$fullUrl/Users/$userId/Items/Resume",
+        "$fullUrl/UserItems/Resume",
         queryParameters: {
-          "Recursive": true,
+          "UserId": userId,
           "Limit": limit,
           "MediaTypes": "Video",
           "EnableTotalRecordCount": false,
           "ParentId": ?parentId,
           "Fields": "PrimaryImageAspectRatio,UserData,RunTimeTicks",
         },
-        options: Options(headers: {"X-Emby-Token": token}),
+        options: Options(headers: jellyfinAuthHeaders(token)),
       );
       final List data = response.data['Items'] ?? [];
       return data.map((m) => Movie.fromJson(m)).toList();
@@ -118,12 +124,13 @@ class JellyfinApi {
     String fullUrl = url.startsWith('http') ? url : 'https://$url';
     try {
       final response = await _dio.get(
-        "$fullUrl/Users/$userId/Items/Latest",
+        "$fullUrl/Items/Latest",
         queryParameters: {
+          "UserId": userId,
           "ParentId": libraryId,
           "Fields": "PrimaryImageAspectRatio,UserData,RunTimeTicks",
         },
-        options: Options(headers: {"X-Emby-Token": token}),
+        options: Options(headers: jellyfinAuthHeaders(token)),
       );
       final List data = response.data ?? [];
       return data.map((m) => Movie.fromJson(m)).toList();
@@ -143,8 +150,9 @@ class JellyfinApi {
     String fullUrl = url.startsWith('http') ? url : 'https://$url';
     try {
       final response = await _dio.get(
-        "$fullUrl/Users/$userId/Items",
+        "$fullUrl/Items",
         queryParameters: {
+          "UserId": userId,
           "ParentId": libraryId,
           "Recursive": true,
           "IncludeItemTypes": "Movie,Series",
@@ -153,7 +161,7 @@ class JellyfinApi {
           "SortBy": "SortName",
           "SortOrder": "Ascending",
         },
-        options: Options(headers: {"X-Emby-Token": token}),
+        options: Options(headers: jellyfinAuthHeaders(token)),
       );
 
       final List data = response.data['Items'] ?? [];
@@ -178,7 +186,7 @@ class JellyfinApi {
           "UserId": userId,
           "Fields": "Overview,PrimaryImageAspectRatio,UserData,RunTimeTicks",
         },
-        options: Options(headers: {"X-Emby-Token": token}),
+        options: Options(headers: jellyfinAuthHeaders(token)),
       );
       final List data = response.data['Items'] ?? [];
       return data.map((e) => Episode.fromJson(e)).toList();
@@ -209,7 +217,7 @@ class JellyfinApi {
       await dio.post(
         url,
         data: {"ItemId": itemId, "PositionTicks": ticks, "IsPaused": isPaused},
-        options: Options(headers: {"X-Emby-Token": token}),
+        options: Options(headers: jellyfinAuthHeaders(token)),
       );
       return true;
     } catch (e) {
@@ -229,14 +237,15 @@ class JellyfinApi {
     if (itemIds.isEmpty) return [];
     try {
       final response = await _dio.get(
-        '$baseUrl/Users/$userId/Items',
+        '$baseUrl/Items',
         queryParameters: {
+          'UserId': userId,
           'Ids': itemIds.join(','),
           'Fields': 'UserData',
           'EnableImages': false,
           'EnableTotalRecordCount': false,
         },
-        options: Options(headers: {'X-Emby-Token': token}),
+        options: Options(headers: jellyfinAuthHeaders(token)),
       );
       final items = (response.data as Map?)?['Items'];
       if (items is! List) return [];
@@ -260,7 +269,7 @@ class JellyfinApi {
     try {
       final response = await _dio.get(
         "$baseUrl/Items/$seriesId",
-        options: Options(headers: {"X-Emby-Token": token}),
+        options: Options(headers: jellyfinAuthHeaders(token)),
       );
       return response.data['Name'];
     } catch (e) {
@@ -279,7 +288,7 @@ class JellyfinApi {
         queryParameters: {
           "Fields": "MediaStreams,MediaSources,Width,Height,Bitrate",
         },
-        options: Options(headers: {"X-Emby-Token": token}),
+        options: Options(headers: jellyfinAuthHeaders(token)),
       );
 
       final data = response.data as Map<String, dynamic>?;
@@ -340,7 +349,7 @@ class JellyfinApi {
       final response = await _dio.get(
         "$baseUrl/Items/$itemId",
         queryParameters: {"Fields": "MediaSources"},
-        options: Options(headers: {"X-Emby-Token": token}),
+        options: Options(headers: jellyfinAuthHeaders(token)),
       );
 
       final data = response.data as Map<String, dynamic>?;
@@ -389,7 +398,7 @@ class JellyfinApi {
           "NextUpDateCutoff": cutoff.toIso8601String(),
           "ParentId": ?parentId,
         },
-        options: Options(headers: {"X-Emby-Token": token}),
+        options: Options(headers: jellyfinAuthHeaders(token)),
       );
 
       final List data = response.data['Items'] ?? [];
@@ -408,8 +417,9 @@ class JellyfinApi {
     String fullUrl = url.startsWith('http') ? url : 'https://$url';
     try {
       final response = await _dio.get(
-        "$fullUrl/Users/$userId/Items",
+        "$fullUrl/Items",
         queryParameters: {
+          "UserId": userId,
           "Recursive": true,
           "Filters": "IsFavorite", // Magiczny filtr API Jellyfina!
           "IncludeItemTypes": "Movie,Series,Episode",
@@ -418,7 +428,7 @@ class JellyfinApi {
           "SortBy": "SortName",
           "SortOrder": "Ascending",
         },
-        options: Options(headers: {"X-Emby-Token": token}),
+        options: Options(headers: jellyfinAuthHeaders(token)),
       );
 
       final List data = response.data['Items'] ?? [];
@@ -437,14 +447,15 @@ class JellyfinApi {
     required bool isFavorite,
   }) async {
     final fullUrl = baseUrl.startsWith('http') ? baseUrl : 'https://$baseUrl';
-    final url = '$fullUrl/Users/$userId/FavoriteItems/$itemId';
+    final url = '$fullUrl/UserFavoriteItems/$itemId';
+    final query = {'UserId': userId};
 
     try {
-      final options = Options(headers: {'X-Emby-Token': token});
+      final options = Options(headers: jellyfinAuthHeaders(token));
       if (isFavorite) {
-        await _dio.post(url, options: options);
+        await _dio.post(url, queryParameters: query, options: options);
       } else {
-        await _dio.delete(url, options: options);
+        await _dio.delete(url, queryParameters: query, options: options);
       }
       return true;
     } catch (e) {
@@ -461,14 +472,15 @@ class JellyfinApi {
     required bool played,
   }) async {
     final fullUrl = baseUrl.startsWith('http') ? baseUrl : 'https://$baseUrl';
-    final url = '$fullUrl/Users/$userId/PlayedItems/$itemId';
+    final url = '$fullUrl/UserPlayedItems/$itemId';
+    final query = {'UserId': userId};
 
     try {
-      final options = Options(headers: {'X-Emby-Token': token});
+      final options = Options(headers: jellyfinAuthHeaders(token));
       if (played) {
-        await _dio.post(url, options: options);
+        await _dio.post(url, queryParameters: query, options: options);
       } else {
-        await _dio.delete(url, options: options);
+        await _dio.delete(url, queryParameters: query, options: options);
       }
       return true;
     } catch (e) {

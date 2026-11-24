@@ -5,15 +5,23 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import 'base_downloader.dart';
+import '../../utils/jellyfin_auth.dart';
 
 class DioDownloader implements BaseDownloader {
-  DioDownloader({Dio? dio, Future<void> Function(Duration)? wait})
-    : _dio =
-          dio ?? Dio(BaseOptions(connectTimeout: const Duration(seconds: 30))),
-      _wait = wait ?? Future<void>.delayed;
+  DioDownloader({
+    Dio? dio,
+    Future<void> Function(Duration)? wait,
+    CancelToken? cancelToken,
+  }) : _dio =
+           dio ?? Dio(BaseOptions(connectTimeout: const Duration(seconds: 30))),
+       _wait = wait ?? Future<void>.delayed,
+       _cancelToken = cancelToken;
 
   final Dio _dio;
   final Future<void> Function(Duration) _wait;
+  final CancelToken? _cancelToken;
+
+  bool get _isCancelled => _cancelToken?.isCancelled ?? false;
 
   @override
   Future<String?> downloadVideo({
@@ -33,6 +41,8 @@ class DioDownloader implements BaseDownloader {
     onProgress(itemId, 0.0, 'Start...');
 
     for (var attempt = 1; ; attempt++) {
+      // A cancelled download ends quietly: it is not reported as failed.
+      if (_isCancelled) return null;
       try {
         if (wifiOnly) {
           final connectivity = await Connectivity().checkConnectivity();
@@ -48,8 +58,9 @@ class DioDownloader implements BaseDownloader {
           downloadUrl,
           temporaryPath,
           deleteOnError: true,
+          cancelToken: _cancelToken,
           options: Options(
-            headers: {'X-Emby-Token': token},
+            headers: jellyfinAuthHeaders(token),
             receiveTimeout: const Duration(minutes: 30),
           ),
           onReceiveProgress: (received, total) {
@@ -88,6 +99,7 @@ class DioDownloader implements BaseDownloader {
         debugPrint('Błąd pobierania Dio (próba $attempt, ${e.runtimeType}).');
         final partial = File(temporaryPath);
         if (await partial.exists()) await partial.delete();
+        if (_isCancelled) return null;
         final status = e is DioException ? e.response?.statusCode : null;
         final permanentHttpError =
             status != null &&
@@ -107,11 +119,15 @@ class DioDownloader implements BaseDownloader {
           return null;
         }
         onProgress(itemId, -1, 'Oczekiwanie na połączenie — ponawianie...');
-        await _wait(
+        final delay = _wait(
           Duration(
             seconds: (2 * (1 << (attempt - 1).clamp(0, 6))).clamp(2, 120),
           ),
         );
+        final cancelToken = _cancelToken;
+        await (cancelToken == null
+            ? delay
+            : Future.any<void>([delay, cancelToken.whenCancel.then((_) {})]));
       }
     }
   }

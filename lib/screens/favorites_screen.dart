@@ -9,6 +9,7 @@ import '../screens/series_details_screen.dart';
 import '../widgets/responsive_grid_layout.dart';
 import '../widgets/media_grid_card.dart';
 import '../widgets/favorite_button.dart';
+import '../utils/jellyfin_auth.dart';
 
 class FavoriteScreen extends StatefulWidget {
   final String baseUrl;
@@ -136,7 +137,7 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
                   title: item.name,
                   imageProvider: CachedNetworkImageProvider(
                     imageUrl,
-                    headers: {"X-Emby-Token": widget.token},
+                    headers: jellyfinAuthHeaders(widget.token),
                   ),
                   badgeIcon: item.type == 'Series'
                       ? Icons.tv

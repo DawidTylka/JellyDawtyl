@@ -10,6 +10,7 @@ import 'settings/settings_screen.dart';
 import '../widgets/ad_banner_widget.dart';
 import '../widgets/jellyfin_section.dart';
 import 'favorites_screen.dart';
+import '../utils/jellyfin_auth.dart';
 
 class LibrarySelectorScreen extends StatefulWidget {
   final List<Library> libraries;
@@ -335,9 +336,7 @@ class _LibrarySelectorScreenState extends State<LibrarySelectorScreen> {
                                   children: [
                                     CachedNetworkImage(
                                       imageUrl: imageUrl,
-                                      httpHeaders: {
-                                        "X-Emby-Token": widget.token,
-                                      },
+                                      httpHeaders: jellyfinAuthHeaders(widget.token),
                                       fit: BoxFit.cover,
                                       placeholder: (context, url) => Container(
                                         color: Colors.blueGrey[900],
