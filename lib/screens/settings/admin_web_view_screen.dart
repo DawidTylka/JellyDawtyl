@@ -14,9 +14,10 @@ class AdminWebViewScreen extends StatefulWidget {
 class _AdminWebViewScreenState extends State<AdminWebViewScreen> {
   final StorageService _storage = StorageService();
 
-  bool _isLoading = false;
+  // True until the first page has loaded, so the overlay is visible.
+  bool _isLoading = true;
   bool _isLoggedIn = false;
-  
+
   WebViewController? _controller;
   String _serverUrl = "";
 
@@ -30,7 +31,8 @@ class _AdminWebViewScreenState extends State<AdminWebViewScreen> {
     final serverUrl = normalizeServerUrl(
       await _storage.getString('baseUrl') ?? '',
     );
-    
+    if (!mounted) return;
+
     if (serverUrl.isNotEmpty) {
       setState(() {
         _serverUrl = serverUrl;
@@ -45,24 +47,30 @@ class _AdminWebViewScreenState extends State<AdminWebViewScreen> {
     }
   }
 
-  void _initWebView() async {
-    final adminUrl = "$_serverUrl/web/#/mypreferencesmenu";
+  Future<void> _initWebView() async {
+    final adminUrl = Uri.parse('$_serverUrl/web/#/mypreferencesmenu');
 
     final controller = WebViewController();
 
+    // The Jellyfin web client is a JavaScript application, so JavaScript
+    // stays enabled. The page is loaded directly: no intermediate HTML with
+    // the address pasted into a script. The user signs in to the web client
+    // separately; the app's token is not passed to the page.
     controller
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageFinished: (adminUrl) {
+          onPageFinished: (_) {
             if (mounted) setState(() => _isLoading = false);
           },
           onUrlChange: (UrlChange change) {
             final currentUrl = change.url ?? '';
-            
-            if (currentUrl.contains('#/home') || currentUrl.contains('home.html')) {
-              controller.runJavaScript("window.location.hash = '#!/mypreferencesmenu';");
+
+            if (currentUrl.contains('#/home') ||
+                currentUrl.contains('home.html')) {
+              controller.runJavaScript(
+                "window.location.hash = '#/mypreferencesmenu';",
+              );
             }
           },
         ),
@@ -72,91 +80,24 @@ class _AdminWebViewScreenState extends State<AdminWebViewScreen> {
       setState(() => _controller = controller);
     }
 
-    await controller.loadHtmlString(
-      """
-      <!DOCTYPE html>
-      <html lang="pl">
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <style>
-            /* Reset i przygotowanie tła pod styl Jellyfina */
-            body {
-              margin: 0;
-              padding: 0;
-              background-color: #101010; /* Ciemne tło */
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              height: 100vh;
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-              overflow: hidden;
-            }
-
-            /* Animowane kółko ładowania */
-            .spinner {
-              width: 48px;
-              height: 48px;
-              border: 4px solid rgba(255, 255, 255, 0.1);
-              border-top-color: #7C4DFF; /* Kolor deepPurpleAccent */
-              border-radius: 50%;
-              animation: spin 1s cubic-bezier(0.55, 0.15, 0.45, 0.85) infinite;
-              margin-bottom: 24px;
-            }
-
-            /* Animacja obrotu */
-            @keyframes spin {
-              0% { transform: rotate(0deg); }
-              100% { transform: rotate(360deg); }
-            }
-
-            /* Styl tekstu */
-            .text {
-              color: #E0E0E0;
-              font-size: 16px;
-              font-weight: 500;
-              letter-spacing: 0.5px;
-            }
-          </style>
-
-          <script>
-            // Funkcja wstrzykująca dane do localStorage
-            function injectAndRedirect() {
-              window.location.replace('$adminUrl');
-            }
-
-            // Dajemy WebView 300ms na płynne wyrenderowanie animacji, zanim JavaScript zablokuje wątek na przekierowanie
-            window.onload = function() {
-              setTimeout(injectAndRedirect, 300);
-            };
-          </script>
-        </head>
-        <body>
-          <div class="spinner"></div>
-          <div class="text">Autoryzacja serwera...</div>
-        </body>
-      </html>
-      """,
-      baseUrl: _serverUrl,
-    );
+    await controller.loadRequest(adminUrl);
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.serverPanel),
-      ),
+      appBar: AppBar(title: Text(l10n.serverPanel)),
       body: _buildBody(),
     );
   }
 
   Widget _buildBody() {
     final l10n = AppLocalizations.of(context)!;
-    if (_isLoading && !_isLoggedIn) {
-      return const Center(child: CircularProgressIndicator());
+    if (!_isLoggedIn) {
+      return _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Center(child: Text(l10n.serverPanelNoServer));
     }
 
     if (_controller == null) {
@@ -173,9 +114,12 @@ class _AdminWebViewScreenState extends State<AdminWebViewScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text(l10n.loadingPanel, style: TextStyle(color: Colors.white)),
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(
+                    l10n.loadingPanel,
+                    style: const TextStyle(color: Colors.white),
+                  ),
                 ],
               ),
             ),

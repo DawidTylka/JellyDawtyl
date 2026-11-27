@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_application_1/services/pending_playback_changes.dart';
+import 'package:jellydawtyl/services/pending_playback_changes.dart';
 
 void main() {
   test(
@@ -91,4 +91,26 @@ void main() {
       expect(pending.keys, ['broken']);
     },
   );
+
+  test('changes of another account are kept for that account', () async {
+    final pending = <String, Map<String, dynamic>>{
+      'mine': {'itemId': 'mine', 'userId': 'u1'},
+      'theirs': {'itemId': 'theirs', 'userId': 'u2'},
+      'legacy': {'itemId': 'legacy'},
+    };
+    final sent = <String>[];
+
+    await flushPendingPlaybackChanges(
+      pending: pending,
+      include: (change) => belongsToUser(change, 'u1'),
+      synchronize: (change) async {
+        sent.add(change['itemId'] as String);
+        return true;
+      },
+      save: () async {},
+    );
+
+    expect(sent, ['mine', 'legacy']);
+    expect(pending.keys, ['theirs']);
+  });
 }

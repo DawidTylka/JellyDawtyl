@@ -251,13 +251,13 @@ abstract class AppLocalizations {
   /// No description provided for @useNativeDownloader.
   ///
   /// In pl, this message translates to:
-  /// **'Użyj menedżera Android'**
+  /// **'Powiadomienia pobierania'**
   String get useNativeDownloader;
 
   /// No description provided for @useNativeDownloaderSub.
   ///
   /// In pl, this message translates to:
-  /// **'Pobieraj w tle przez system'**
+  /// **'Pokazuj postęp pobierania w tle w powiadomieniu systemowym'**
   String get useNativeDownloaderSub;
 
   /// No description provided for @privacy.
@@ -299,25 +299,25 @@ abstract class AppLocalizations {
   /// No description provided for @watchOnline.
   ///
   /// In pl, this message translates to:
-  /// **'OGLĄDAJ ONLINE'**
+  /// **'Oglądaj online'**
   String get watchOnline;
 
   /// No description provided for @watchOffline.
   ///
   /// In pl, this message translates to:
-  /// **'OGLĄDAJ OFFLINE'**
+  /// **'Oglądaj offline'**
   String get watchOffline;
 
   /// No description provided for @downloadToMemory.
   ///
   /// In pl, this message translates to:
-  /// **'POBIERZ DO PAMIĘCI'**
+  /// **'Pobierz do pamięci'**
   String get downloadToMemory;
 
   /// No description provided for @downloadAgain.
   ///
   /// In pl, this message translates to:
-  /// **'POBIERZ PONOWNIE'**
+  /// **'Pobierz ponownie'**
   String get downloadAgain;
 
   /// No description provided for @downloadSeason.
@@ -341,8 +341,8 @@ abstract class AppLocalizations {
   /// No description provided for @deleteItems.
   ///
   /// In pl, this message translates to:
-  /// **'Usuń elementy'**
-  String get deleteItems;
+  /// **'{count, plural, =1{Usuń 1 element} few{Usuń {count} elementy} other{Usuń {count} elementów}}'**
+  String deleteItems(int count);
 
   /// No description provided for @deleteConfirm.
   ///
@@ -799,6 +799,744 @@ abstract class AppLocalizations {
   /// In pl, this message translates to:
   /// **'Nie udało się zmienić stanu obejrzenia.'**
   String get watchedUpdateError;
+
+  /// No description provided for @libraryLoadError.
+  ///
+  /// In pl, this message translates to:
+  /// **'Nie udało się wczytać biblioteki. Sprawdź połączenie z serwerem.'**
+  String get libraryLoadError;
+
+  /// No description provided for @certificateTrustSaveError.
+  ///
+  /// In pl, this message translates to:
+  /// **'Nie udało się zapisać ustawienia certyfikatu.'**
+  String get certificateTrustSaveError;
+
+  /// No description provided for @loginCertificateError.
+  ///
+  /// In pl, this message translates to:
+  /// **'Certyfikat HTTPS serwera nie jest zaufany. Jeśli to Twój serwer z własnym certyfikatem, zaznacz „Zaufaj certyfikatowi HTTPS serwera”.'**
+  String get loginCertificateError;
+
+  /// No description provided for @loginServerError.
+  ///
+  /// In pl, this message translates to:
+  /// **'Serwer zwrócił nieoczekiwaną odpowiedź. Sprawdź adres serwera.'**
+  String get loginServerError;
+
+  /// No description provided for @insecureHttpWarning.
+  ///
+  /// In pl, this message translates to:
+  /// **'Ten adres używa nieszyfrowanego HTTP poza siecią lokalną. Hasło i token będą przesyłane jawnym tekstem. Użyj https://, jeśli serwer na to pozwala.'**
+  String get insecureHttpWarning;
+
+  /// No description provided for @trustCertificateTitle.
+  ///
+  /// In pl, this message translates to:
+  /// **'Zaufaj certyfikatowi HTTPS serwera'**
+  String get trustCertificateTitle;
+
+  /// No description provided for @trustCertificateSub.
+  ///
+  /// In pl, this message translates to:
+  /// **'Użyj tylko dla serwera z własnym lub niezaufanym certyfikatem.'**
+  String get trustCertificateSub;
+
+  /// No description provided for @credentialStorageError.
+  ///
+  /// In pl, this message translates to:
+  /// **'Nie można odczytać zapisanych danych logowania. Twoje dane nie zostały usunięte. Spróbuj ponownie.'**
+  String get credentialStorageError;
+
+  /// No description provided for @tryAgain.
+  ///
+  /// In pl, this message translates to:
+  /// **'Spróbuj ponownie'**
+  String get tryAgain;
+
+  /// No description provided for @serverUnreachable.
+  ///
+  /// In pl, this message translates to:
+  /// **'Nie można połączyć się z serwerem. Sprawdź połączenie z internetem lub czy serwer działa. Pobrane pliki są dostępne offline.'**
+  String get serverUnreachable;
+
+  /// No description provided for @failedDownloadTitle.
+  ///
+  /// In pl, this message translates to:
+  /// **'Nieudane pobieranie'**
+  String get failedDownloadTitle;
+
+  /// No description provided for @failedDownloadCount.
+  ///
+  /// In pl, this message translates to:
+  /// **'{count, plural, =1{1 pobieranie nie powiodło się.} few{{count} pobrania nie powiodły się.} other{{count} pobrań nie powiodło się.}}'**
+  String failedDownloadCount(int count);
+
+  /// No description provided for @failedDownloadRetryQuestion.
+  ///
+  /// In pl, this message translates to:
+  /// **'Czy chcesz ponowić pobieranie?'**
+  String get failedDownloadRetryQuestion;
+
+  /// No description provided for @no.
+  ///
+  /// In pl, this message translates to:
+  /// **'Nie'**
+  String get no;
+
+  /// No description provided for @retry.
+  ///
+  /// In pl, this message translates to:
+  /// **'Ponów'**
+  String get retry;
+
+  /// No description provided for @playerTlsVerify.
+  ///
+  /// In pl, this message translates to:
+  /// **'Weryfikuj certyfikat TLS w odtwarzaczu'**
+  String get playerTlsVerify;
+
+  /// No description provided for @playerTlsVerifySub.
+  ///
+  /// In pl, this message translates to:
+  /// **'Odtwarzacz sprawdza certyfikat HTTPS serwera (pomija serwery oznaczone jako zaufane). Wyłącz, jeśli odtwarzanie przez HTTPS przestało działać.'**
+  String get playerTlsVerifySub;
+
+  /// No description provided for @introSkipperSection.
+  ///
+  /// In pl, this message translates to:
+  /// **'Pomijanie intro (Intro Skipper)'**
+  String get introSkipperSection;
+
+  /// No description provided for @showSkipButton.
+  ///
+  /// In pl, this message translates to:
+  /// **'Przycisk pomijania'**
+  String get showSkipButton;
+
+  /// No description provided for @showSkipButtonSub.
+  ///
+  /// In pl, this message translates to:
+  /// **'Pokazuj „Pomiń intro” i podobne przyciski, gdy serwer zna segmenty odcinka (wtyczka Intro Skipper lub segmenty Jellyfin 10.10+)'**
+  String get showSkipButtonSub;
+
+  /// No description provided for @autoSkipIntro.
+  ///
+  /// In pl, this message translates to:
+  /// **'Automatycznie pomijaj intro i podsumowanie'**
+  String get autoSkipIntro;
+
+  /// No description provided for @autoSkipIntroSub.
+  ///
+  /// In pl, this message translates to:
+  /// **'Przewija od razu, bez naciskania przycisku'**
+  String get autoSkipIntroSub;
+
+  /// No description provided for @autoSkipCredits.
+  ///
+  /// In pl, this message translates to:
+  /// **'Automatycznie pomijaj napisy końcowe'**
+  String get autoSkipCredits;
+
+  /// No description provided for @autoSkipCreditsSub.
+  ///
+  /// In pl, this message translates to:
+  /// **'Po napisach końcowych przechodzi do następnego odcinka, jeśli jest'**
+  String get autoSkipCreditsSub;
+
+  /// No description provided for @selectedCount.
+  ///
+  /// In pl, this message translates to:
+  /// **'Zaznaczono: {count}'**
+  String selectedCount(int count);
+
+  /// No description provided for @searchDownloadsHint.
+  ///
+  /// In pl, this message translates to:
+  /// **'Szukaj pobranych...'**
+  String get searchDownloadsHint;
+
+  /// No description provided for @skipIntro.
+  ///
+  /// In pl, this message translates to:
+  /// **'Pomiń intro'**
+  String get skipIntro;
+
+  /// No description provided for @skipCredits.
+  ///
+  /// In pl, this message translates to:
+  /// **'Pomiń napisy końcowe'**
+  String get skipCredits;
+
+  /// No description provided for @skipRecap.
+  ///
+  /// In pl, this message translates to:
+  /// **'Pomiń podsumowanie'**
+  String get skipRecap;
+
+  /// No description provided for @skipPreview.
+  ///
+  /// In pl, this message translates to:
+  /// **'Pomiń zapowiedź'**
+  String get skipPreview;
+
+  /// No description provided for @skipCommercial.
+  ///
+  /// In pl, this message translates to:
+  /// **'Pomiń reklamę'**
+  String get skipCommercial;
+
+  /// No description provided for @previousEpisode.
+  ///
+  /// In pl, this message translates to:
+  /// **'Poprzedni odcinek'**
+  String get previousEpisode;
+
+  /// No description provided for @nextEpisode.
+  ///
+  /// In pl, this message translates to:
+  /// **'Następny odcinek'**
+  String get nextEpisode;
+
+  /// No description provided for @serverPanelNoServer.
+  ///
+  /// In pl, this message translates to:
+  /// **'Najpierw zaloguj się do serwera.'**
+  String get serverPanelNoServer;
+
+  /// No description provided for @unwantedSnoozedUntil.
+  ///
+  /// In pl, this message translates to:
+  /// **'do {date}'**
+  String unwantedSnoozedUntil(String date);
+
+  /// No description provided for @unwantedUntilNewEpisode.
+  ///
+  /// In pl, this message translates to:
+  /// **'do nowego odcinka'**
+  String get unwantedUntilNewEpisode;
+
+  /// No description provided for @unwantedSnoozed.
+  ///
+  /// In pl, this message translates to:
+  /// **'Uśpiony'**
+  String get unwantedSnoozed;
+
+  /// No description provided for @undo.
+  ///
+  /// In pl, this message translates to:
+  /// **'Cofnij'**
+  String get undo;
+
+  /// No description provided for @unwantedError.
+  ///
+  /// In pl, this message translates to:
+  /// **'Nie udało się zmienić listy. Spróbuj ponownie.'**
+  String get unwantedError;
+
+  /// No description provided for @unwantedWatchLaterAdded.
+  ///
+  /// In pl, this message translates to:
+  /// **'Dodano „{name}” do „Na później”'**
+  String unwantedWatchLaterAdded(String name);
+
+  /// No description provided for @unwantedWatchLaterRemoved.
+  ///
+  /// In pl, this message translates to:
+  /// **'Usunięto „{name}” z „Na później”'**
+  String unwantedWatchLaterRemoved(String name);
+
+  /// No description provided for @unwantedMarked.
+  ///
+  /// In pl, this message translates to:
+  /// **'„{name}” → Nieulubione. Zniknie z list do oglądania.'**
+  String unwantedMarked(String name);
+
+  /// No description provided for @unwantedRestored.
+  ///
+  /// In pl, this message translates to:
+  /// **'Przywrócono „{name}”'**
+  String unwantedRestored(String name);
+
+  /// No description provided for @unwantedSnoozeTitle.
+  ///
+  /// In pl, this message translates to:
+  /// **'Uśpij „{name}”'**
+  String unwantedSnoozeTitle(String name);
+
+  /// No description provided for @unwantedSnoozeHint.
+  ///
+  /// In pl, this message translates to:
+  /// **'Uśpiony serial znika z „Następne” i wraca sam po wybranym czasie.'**
+  String get unwantedSnoozeHint;
+
+  /// No description provided for @unwantedWake.
+  ///
+  /// In pl, this message translates to:
+  /// **'Obudź teraz'**
+  String get unwantedWake;
+
+  /// No description provided for @unwantedSnoozeNewEpisode.
+  ///
+  /// In pl, this message translates to:
+  /// **'Do nowego odcinka'**
+  String get unwantedSnoozeNewEpisode;
+
+  /// No description provided for @unwantedSnoozeDays.
+  ///
+  /// In pl, this message translates to:
+  /// **'Na {days} dni'**
+  String unwantedSnoozeDays(int days);
+
+  /// No description provided for @unwantedWoken.
+  ///
+  /// In pl, this message translates to:
+  /// **'Obudzono „{name}”'**
+  String unwantedWoken(String name);
+
+  /// No description provided for @unwantedSnoozedMessage.
+  ///
+  /// In pl, this message translates to:
+  /// **'Uśpiono „{name}”'**
+  String unwantedSnoozedMessage(String name);
+
+  /// No description provided for @unwantedWatchLater.
+  ///
+  /// In pl, this message translates to:
+  /// **'Na później'**
+  String get unwantedWatchLater;
+
+  /// No description provided for @unwantedSnooze.
+  ///
+  /// In pl, this message translates to:
+  /// **'Uśpij'**
+  String get unwantedSnooze;
+
+  /// No description provided for @unwantedNotInterested.
+  ///
+  /// In pl, this message translates to:
+  /// **'Nieulubione'**
+  String get unwantedNotInterested;
+
+  /// No description provided for @unwantedAppliesToSeries.
+  ///
+  /// In pl, this message translates to:
+  /// **'Dotyczy całego serialu „{name}”'**
+  String unwantedAppliesToSeries(String name);
+
+  /// No description provided for @unwantedSnoozedList.
+  ///
+  /// In pl, this message translates to:
+  /// **'Uśpione'**
+  String get unwantedSnoozedList;
+
+  /// No description provided for @unwantedEmptyWatchLater.
+  ///
+  /// In pl, this message translates to:
+  /// **'Lista „Na później” jest pusta. Dodaj film lub serial przyciskiem „Na później” na jego stronie.'**
+  String get unwantedEmptyWatchLater;
+
+  /// No description provided for @unwantedEmptySnoozed.
+  ///
+  /// In pl, this message translates to:
+  /// **'Nic nie śpi. Uśpij serial, żeby na jakiś czas zniknął z „Następne”.'**
+  String get unwantedEmptySnoozed;
+
+  /// No description provided for @unwantedEmptyUnwanted.
+  ///
+  /// In pl, this message translates to:
+  /// **'Brak nieulubionych. Oznacz serial lub film kciukiem w dół na jego stronie.'**
+  String get unwantedEmptyUnwanted;
+
+  /// No description provided for @unwantedAddedOn.
+  ///
+  /// In pl, this message translates to:
+  /// **'Dodano {date}'**
+  String unwantedAddedOn(String date);
+
+  /// No description provided for @unwantedRemoveWatchLater.
+  ///
+  /// In pl, this message translates to:
+  /// **'Usuń z „Na później”'**
+  String get unwantedRemoveWatchLater;
+
+  /// No description provided for @unwantedRestore.
+  ///
+  /// In pl, this message translates to:
+  /// **'Przywróć'**
+  String get unwantedRestore;
+
+  /// No description provided for @unwantedMyLists.
+  ///
+  /// In pl, this message translates to:
+  /// **'Moje listy'**
+  String get unwantedMyLists;
+
+  /// No description provided for @durationHoursMinutes.
+  ///
+  /// In pl, this message translates to:
+  /// **'{hours} godz. {minutes} min'**
+  String durationHoursMinutes(int hours, int minutes);
+
+  /// No description provided for @durationMinutes.
+  ///
+  /// In pl, this message translates to:
+  /// **'{minutes} min'**
+  String durationMinutes(int minutes);
+
+  /// No description provided for @seasonEpisodeLabel.
+  ///
+  /// In pl, this message translates to:
+  /// **'Sezon {season} · Odcinek {episode}'**
+  String seasonEpisodeLabel(int season, int episode);
+
+  /// No description provided for @seasonEpisodeShort.
+  ///
+  /// In pl, this message translates to:
+  /// **'S{season} O{episode}'**
+  String seasonEpisodeShort(int season, int episode);
+
+  /// No description provided for @endsAt.
+  ///
+  /// In pl, this message translates to:
+  /// **'Koniec o {time}'**
+  String endsAt(String time);
+
+  /// No description provided for @timeLeft.
+  ///
+  /// In pl, this message translates to:
+  /// **'Zostało {duration}'**
+  String timeLeft(String duration);
+
+  /// No description provided for @subtitleCount.
+  ///
+  /// In pl, this message translates to:
+  /// **'{count, plural, =1{1 napisy} few{{count} napisy} many{{count} napisów} other{{count} napisów}}'**
+  String subtitleCount(int count);
+
+  /// No description provided for @watched.
+  ///
+  /// In pl, this message translates to:
+  /// **'Obejrzane'**
+  String get watched;
+
+  /// No description provided for @downloadedBadge.
+  ///
+  /// In pl, this message translates to:
+  /// **'Pobrane'**
+  String get downloadedBadge;
+
+  /// No description provided for @showMore.
+  ///
+  /// In pl, this message translates to:
+  /// **'Pokaż więcej'**
+  String get showMore;
+
+  /// No description provided for @showLess.
+  ///
+  /// In pl, this message translates to:
+  /// **'Pokaż mniej'**
+  String get showLess;
+
+  /// No description provided for @directedBy.
+  ///
+  /// In pl, this message translates to:
+  /// **'Reżyseria'**
+  String get directedBy;
+
+  /// No description provided for @writtenBy.
+  ///
+  /// In pl, this message translates to:
+  /// **'Scenariusz'**
+  String get writtenBy;
+
+  /// No description provided for @studio.
+  ///
+  /// In pl, this message translates to:
+  /// **'Studio'**
+  String get studio;
+
+  /// No description provided for @cast.
+  ///
+  /// In pl, this message translates to:
+  /// **'Obsada'**
+  String get cast;
+
+  /// No description provided for @chapters.
+  ///
+  /// In pl, this message translates to:
+  /// **'Rozdziały'**
+  String get chapters;
+
+  /// No description provided for @chapterNumber.
+  ///
+  /// In pl, this message translates to:
+  /// **'Rozdział {number}'**
+  String chapterNumber(int number);
+
+  /// No description provided for @moreEpisodes.
+  ///
+  /// In pl, this message translates to:
+  /// **'Inne odcinki'**
+  String get moreEpisodes;
+
+  /// No description provided for @technicalDetails.
+  ///
+  /// In pl, this message translates to:
+  /// **'Informacje techniczne'**
+  String get technicalDetails;
+
+  /// No description provided for @mediaContainer.
+  ///
+  /// In pl, this message translates to:
+  /// **'Kontener'**
+  String get mediaContainer;
+
+  /// No description provided for @mediaFileSize.
+  ///
+  /// In pl, this message translates to:
+  /// **'Rozmiar'**
+  String get mediaFileSize;
+
+  /// No description provided for @mediaBitrate.
+  ///
+  /// In pl, this message translates to:
+  /// **'Bitrate'**
+  String get mediaBitrate;
+
+  /// No description provided for @mediaVideo.
+  ///
+  /// In pl, this message translates to:
+  /// **'Wideo'**
+  String get mediaVideo;
+
+  /// No description provided for @mediaAudio.
+  ///
+  /// In pl, this message translates to:
+  /// **'Dźwięk'**
+  String get mediaAudio;
+
+  /// No description provided for @cancelDownload.
+  ///
+  /// In pl, this message translates to:
+  /// **'Anuluj pobieranie'**
+  String get cancelDownload;
+
+  /// No description provided for @favoritesAll.
+  ///
+  /// In pl, this message translates to:
+  /// **'Wszystkie'**
+  String get favoritesAll;
+
+  /// No description provided for @favoritesMovies.
+  ///
+  /// In pl, this message translates to:
+  /// **'Filmy'**
+  String get favoritesMovies;
+
+  /// No description provided for @favoritesSeries.
+  ///
+  /// In pl, this message translates to:
+  /// **'Seriale'**
+  String get favoritesSeries;
+
+  /// No description provided for @favoritesEpisodes.
+  ///
+  /// In pl, this message translates to:
+  /// **'Odcinki'**
+  String get favoritesEpisodes;
+
+  /// No description provided for @sortBy.
+  ///
+  /// In pl, this message translates to:
+  /// **'Sortuj'**
+  String get sortBy;
+
+  /// No description provided for @sortName.
+  ///
+  /// In pl, this message translates to:
+  /// **'Nazwa'**
+  String get sortName;
+
+  /// No description provided for @sortDateAdded.
+  ///
+  /// In pl, this message translates to:
+  /// **'Ostatnio dodane'**
+  String get sortDateAdded;
+
+  /// No description provided for @sortPremiere.
+  ///
+  /// In pl, this message translates to:
+  /// **'Data premiery'**
+  String get sortPremiere;
+
+  /// No description provided for @sortRating.
+  ///
+  /// In pl, this message translates to:
+  /// **'Ocena'**
+  String get sortRating;
+
+  /// No description provided for @noFavorites.
+  ///
+  /// In pl, this message translates to:
+  /// **'Brak ulubionych'**
+  String get noFavorites;
+
+  /// No description provided for @noFavoritesHint.
+  ///
+  /// In pl, this message translates to:
+  /// **'Dotknij serca na filmie, serialu lub odcinku, żeby go tu dodać.'**
+  String get noFavoritesHint;
+
+  /// No description provided for @noFavoritesInFilter.
+  ///
+  /// In pl, this message translates to:
+  /// **'Brak ulubionych w tej kategorii.'**
+  String get noFavoritesInFilter;
+
+  /// No description provided for @loadError.
+  ///
+  /// In pl, this message translates to:
+  /// **'Nie udało się wczytać danych z serwera.'**
+  String get loadError;
+
+  /// No description provided for @search.
+  ///
+  /// In pl, this message translates to:
+  /// **'Szukaj'**
+  String get search;
+
+  /// No description provided for @searchEverywhereHint.
+  ///
+  /// In pl, this message translates to:
+  /// **'Szukaj filmów, seriali i odcinków'**
+  String get searchEverywhereHint;
+
+  /// No description provided for @noSearchResults.
+  ///
+  /// In pl, this message translates to:
+  /// **'Nic nie znaleziono dla „{query}”'**
+  String noSearchResults(String query);
+
+  /// No description provided for @searchStartTyping.
+  ///
+  /// In pl, this message translates to:
+  /// **'Wpisz co najmniej 2 znaki.'**
+  String get searchStartTyping;
+
+  /// No description provided for @episodeOf.
+  ///
+  /// In pl, this message translates to:
+  /// **'{series} · S{season} O{episode}'**
+  String episodeOf(String series, int season, int episode);
+
+  /// No description provided for @unwantedSnoozeOneDay.
+  ///
+  /// In pl, this message translates to:
+  /// **'Na 1 dzień'**
+  String get unwantedSnoozeOneDay;
+
+  /// No description provided for @unwantedSnoozeWeek.
+  ///
+  /// In pl, this message translates to:
+  /// **'Na tydzień'**
+  String get unwantedSnoozeWeek;
+
+  /// No description provided for @unwantedSnoozeTwoWeeks.
+  ///
+  /// In pl, this message translates to:
+  /// **'Na 2 tygodnie'**
+  String get unwantedSnoozeTwoWeeks;
+
+  /// No description provided for @unwantedSnoozeMonth.
+  ///
+  /// In pl, this message translates to:
+  /// **'Na miesiąc'**
+  String get unwantedSnoozeMonth;
+
+  /// No description provided for @unwantedSnoozeThreeMonths.
+  ///
+  /// In pl, this message translates to:
+  /// **'Na 3 miesiące'**
+  String get unwantedSnoozeThreeMonths;
+
+  /// No description provided for @noEpisodes.
+  ///
+  /// In pl, this message translates to:
+  /// **'Ten serial nie ma jeszcze odcinków.'**
+  String get noEpisodes;
+
+  /// No description provided for @specials.
+  ///
+  /// In pl, this message translates to:
+  /// **'Odcinki specjalne'**
+  String get specials;
+
+  /// No description provided for @seasonNumber.
+  ///
+  /// In pl, this message translates to:
+  /// **'Sezon {number}'**
+  String seasonNumber(int number);
+
+  /// No description provided for @download.
+  ///
+  /// In pl, this message translates to:
+  /// **'Pobierz'**
+  String get download;
+
+  /// No description provided for @playNext.
+  ///
+  /// In pl, this message translates to:
+  /// **'Odtwórz'**
+  String get playNext;
+
+  /// No description provided for @episodeNumber.
+  ///
+  /// In pl, this message translates to:
+  /// **'Odcinek {number}'**
+  String episodeNumber(int number);
+
+  /// No description provided for @searchInLibraryHint.
+  ///
+  /// In pl, this message translates to:
+  /// **'Szukaj w: {library}'**
+  String searchInLibraryHint(String library);
+
+  /// No description provided for @downloadsInProgress.
+  ///
+  /// In pl, this message translates to:
+  /// **'Pobieranie ({count})'**
+  String downloadsInProgress(int count);
+
+  /// No description provided for @selectAll.
+  ///
+  /// In pl, this message translates to:
+  /// **'Zaznacz wszystko'**
+  String get selectAll;
+
+  /// No description provided for @selectItems.
+  ///
+  /// In pl, this message translates to:
+  /// **'Zaznacz do usunięcia'**
+  String get selectItems;
+
+  /// No description provided for @refresh.
+  ///
+  /// In pl, this message translates to:
+  /// **'Odśwież'**
+  String get refresh;
+
+  /// No description provided for @noOfflineFilesHint.
+  ///
+  /// In pl, this message translates to:
+  /// **'Na stronie filmu lub odcinka wybierz „Pobierz do pamięci”, a na stronie serialu „Pobierz sezon”.'**
+  String get noOfflineFilesHint;
+
+  /// No description provided for @general.
+  ///
+  /// In pl, this message translates to:
+  /// **'Ogólne'**
+  String get general;
 }
 
 class _AppLocalizationsDelegate

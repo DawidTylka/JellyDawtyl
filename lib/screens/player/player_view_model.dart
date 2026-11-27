@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -8,13 +9,14 @@ import 'package:audio_session/audio_session.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
-// Upewnij się, że te ścieżki pasują do struktury Twojego projektu:
-import '../../../services/jellyfin_api.dart';
-import '../../../services/storage_service.dart';
-import '../../../services/playback_sync_service.dart';
-import '../../../services/server_certificate_trust.dart';
-import '../../../main.dart'; // Tu znajduje się globalny audioHandler
+import '../../main.dart'; // globalny audioHandler
+import '../../models/media_segment.dart';
+import '../../services/jellyfin_api.dart';
+import '../../services/playback_sync_service.dart';
+import '../../services/storage_service.dart';
 import '../../utils/jellyfin_auth.dart';
+import 'offline_episodes.dart';
+import 'player_tls.dart';
 
 class PlayerViewModel extends ChangeNotifier {
   // === Parametry Wejściowe ===
@@ -55,6 +57,32 @@ class PlayerViewModel extends ChangeNotifier {
   String? currentExternalSubtitlePath;
   List<File> localSubtitleFiles = [];
   final Map<String, String> localSubtitleLabels = {};
+
+  // === Segmenty do pominięcia (Intro Skipper / MediaSegments) ===
+  List<MediaSegment> segments = const [];
+  MediaSegment? activeSegment;
+  bool _showSkipButton = true;
+  bool _autoSkipIntro = false;
+  bool _autoSkipCredits = false;
+  bool _autoPlayNext = true;
+  final Set<Duration> _autoSkippedSegments = {};
+  StreamSubscription<Duration>? _positionSubscription;
+
+  // === Sesja odtwarzania na serwerze ===
+  // PlaySessionId wiąże raporty z zadaniem transkodowania, żeby serwer mógł
+  // zatrzymać ffmpeg po zakończeniu lub zmianie jakości.
+  String _playSessionId = _newPlaySessionId();
+  String? _deviceId;
+
+  static String _newPlaySessionId() {
+    final random = Random.secure();
+    return List.generate(
+      16,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
+  }
+
+  String get _playMethod => selectedWidth == null ? 'DirectPlay' : 'Transcode';
 
   // === Stan Wewnętrzny Logiki ===
   Timer? _progressTimer;
@@ -115,6 +143,19 @@ class PlayerViewModel extends ChangeNotifier {
       };
 
       await _fetchJellyfinStreamData();
+      await _loadSkipSettings();
+      unawaited(_loadSegments());
+      if (!isOffline) _deviceId = await StorageService().getDeviceId();
+
+      final storage = StorageService();
+      await configurePlayerTls(
+        player,
+        baseUrl: isOffline ? null : baseUrl,
+        enabled: await storage.getSetting(
+          playerTlsVerifySettingKey,
+          defaultValue: playerTlsVerifyDefault,
+        ),
+      );
 
       // Od razu ładujemy listę odcinków serialu (potrzebne do przycisków nawigacji)
       if (isOffline) {
@@ -137,13 +178,14 @@ class PlayerViewModel extends ChangeNotifier {
       _setupPlayerListeners();
 
       await player.open(Media(finalSource, httpHeaders: headers), play: true);
+      _reportSessionStart();
 
       if (isOffline || baseUrl != null) {
         _startProgressReporting();
       }
     } catch (e) {
       _setError("Wystąpił błąd inicjalizacji odtwarzacza.");
-      debugPrint("Initialize Error: $e");
+      debugPrint('Błąd inicjalizacji odtwarzacza (${e.runtimeType}).');
     }
   }
 
@@ -153,9 +195,9 @@ class PlayerViewModel extends ChangeNotifier {
 
   Future<Uri?> _cacheArtworkUri() async {
     if (isOffline || baseUrl == null || token == null) return null;
-    final client = HttpClient()
-      ..badCertificateCallback =
-          ServerCertificateTrust.acceptsInvalidCertificate;
+    // HttpOverrides.global (ServerCertificateTrust) already applies the
+    // per-host certificate trust to every HttpClient.
+    final client = HttpClient();
     try {
       final request = await client.getUrl(
         Uri.parse('$baseUrl/Items/$itemId/Images/Primary'),
@@ -288,10 +330,57 @@ class PlayerViewModel extends ChangeNotifier {
         false; // Reset, aby duration listener obsłużył _pendingSeek
     notifyListeners();
 
+    // End the previous server session first, so its transcode stops now
+    // instead of running until the server's own timeout.
+    _reportSessionStopped(position: _pendingSeek ?? Duration.zero);
+    _playSessionId = _newPlaySessionId();
+
     final newUrl = _buildCompatibleUrl(originalUrl);
     final headers = token != null ? jellyfinAuthHeaders(token!) : null;
 
     await player.open(Media(newUrl, httpHeaders: headers), play: true);
+    _reportSessionStart();
+  }
+
+  void _reportSessionStart() {
+    if (isOffline || baseUrl == null || token == null || userId == null) {
+      return;
+    }
+    unawaited(
+      JellyfinApi().reportPlaybackProgress(
+        baseUrl: baseUrl!,
+        token: token!,
+        userId: userId!,
+        itemId: itemId,
+        position: Duration(milliseconds: startPositionMs ?? 0),
+        isPaused: false,
+        isStopped: false,
+        isStart: true,
+        playSessionId: _playSessionId,
+        mediaSourceId: itemId,
+        playMethod: _playMethod,
+      ),
+    );
+  }
+
+  void _reportSessionStopped({required Duration position}) {
+    if (isOffline || baseUrl == null || token == null || userId == null) {
+      return;
+    }
+    unawaited(
+      JellyfinApi().reportPlaybackProgress(
+        baseUrl: baseUrl!,
+        token: token!,
+        userId: userId!,
+        itemId: itemId,
+        position: position,
+        isPaused: false,
+        isStopped: true,
+        playSessionId: _playSessionId,
+        mediaSourceId: itemId,
+        playMethod: _playMethod,
+      ),
+    );
   }
 
   void setAudioTrack(dynamic track, {bool isJellyfinIndex = false}) {
@@ -336,9 +425,7 @@ class PlayerViewModel extends ChangeNotifier {
   Future<void> _fetchJellyfinStreamData() async {
     if (isOffline || baseUrl == null || token == null) return;
 
-    final httpClient = HttpClient()
-      ..badCertificateCallback =
-          ServerCertificateTrust.acceptsInvalidCertificate;
+    final httpClient = HttpClient();
     try {
       final url = Uri.parse(
         '$baseUrl/Items/$itemId',
@@ -411,6 +498,8 @@ class PlayerViewModel extends ChangeNotifier {
       if (selectedAudioIndex != null) {
         query['AudioStreamIndex'] = '$selectedAudioIndex';
       }
+      query['PlaySessionId'] = _playSessionId;
+      if (_deviceId != null) query['DeviceId'] = _deviceId!;
       return Uri.parse(
         '$baseUrl/Videos/$itemId/master.m3u8',
       ).replace(queryParameters: query).toString();
@@ -446,9 +535,7 @@ class PlayerViewModel extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    final httpClient = HttpClient()
-      ..badCertificateCallback =
-          ServerCertificateTrust.acceptsInvalidCertificate;
+    final httpClient = HttpClient();
     try {
       final subUrl = Uri.parse(
         '$baseUrl/Videos/$itemId/$itemId/Subtitles/$selectedSubtitleIndex/0/Stream.srt',
@@ -560,6 +647,9 @@ class PlayerViewModel extends ChangeNotifier {
             position: player.state.position,
             isPaused: false,
             isStopped: false,
+            playSessionId: _playSessionId,
+            mediaSourceId: itemId,
+            playMethod: _playMethod,
           );
         }
       }
@@ -637,12 +727,13 @@ class PlayerViewModel extends ChangeNotifier {
     );
   }
 
-  /// W trybie offline: skanuje katalog z plikami i buduje listę odcinków
+  /// W trybie offline: skanuje katalog z plikami i buduje listę odcinków.
+  /// Odcinek pobrany w kilku jakościach jest na liście raz, więc „następny
+  /// odcinek” nie odtwarza tego samego w innej jakości.
   void _loadOfflineEpisodes() {
     try {
       final file = File(originalUrl);
       final dir = file.parent;
-      // Case-insensitive: .mp4, .MP4, .mkv, .MKV, .avi, .m4v itp.
       final videoFiles = dir.listSync().whereType<File>().where((f) {
         final lower = f.path.toLowerCase();
         return lower.endsWith('.mp4') ||
@@ -652,34 +743,11 @@ class PlayerViewModel extends ChangeNotifier {
       }).toList();
 
       if (videoFiles.isEmpty) {
-        debugPrint("_loadOfflineEpisodes: brak plików w ${dir.path}");
+        debugPrint("_loadOfflineEpisodes: brak plików w folderze");
         return;
       }
 
-      // Sortujemy pliki aby indeksy były w dobrej kolejności
-      videoFiles.sort(
-        (a, b) => a.path.toLowerCase().compareTo(b.path.toLowerCase()),
-      );
-
-      // Budujemy listę odcinków — każdy plik w folderze to "odcinek"
-      _episodeItems = [];
-      final currentFileName = file.path.split(Platform.pathSeparator).last;
-
-      for (int i = 0; i < videoFiles.length; i++) {
-        final f = videoFiles[i];
-        final fName = f.path.split(Platform.pathSeparator).last;
-
-        // Próbujemy wyciągnąć numery z nazwy (opcjonalnie)
-        final match = RegExp(r'_S(\d+)E(\d+)_').firstMatch(fName);
-        final epNum = match != null ? int.parse(match.group(2)!) : (i + 1);
-        final seasonNum = match != null ? int.parse(match.group(1)!) : 1;
-
-        final title = fName
-            .replaceAll(
-              RegExp(r'\.(mp4|mkv|m4v|avi)$', caseSensitive: false),
-              '',
-            )
-            .replaceAll('_', ' ');
+      final candidates = videoFiles.map((f) {
         Map<String, dynamic> metadata = {};
         final metadataFile = File('${f.path}.json');
         if (metadataFile.existsSync()) {
@@ -689,20 +757,17 @@ class PlayerViewModel extends ChangeNotifier {
             );
           } catch (_) {}
         }
-        _episodeItems!.add({
-          ...metadata,
-          'Id': metadata['Id'] ?? '',
-          'Name': metadata['Name'] ?? title,
-          'IndexNumber': metadata['IndexNumber'] ?? epNum,
-          'ParentIndexNumber': metadata['ParentIndexNumber'] ?? seasonNum,
-          'Path': f.path,
-        });
+        return OfflineEpisodeFile(path: f.path, metadata: metadata);
+      }).toList();
 
-        // Zapamiętujemy indeks bieżącego pliku
-        if (fName == currentFileName) {
-          _currentEpisodeIndex = i;
-        }
-      }
+      _episodeItems = buildOfflineEpisodeList(
+        candidates,
+        currentPath: file.path,
+        pathSeparator: Platform.pathSeparator,
+      );
+      _currentEpisodeIndex = _episodeItems!.indexWhere(
+        (item) => item['Path'] == file.path,
+      );
 
       _episodesLoaded = true;
       notifyListeners();
@@ -768,9 +833,7 @@ class PlayerViewModel extends ChangeNotifier {
   Future<void> _ensureEpisodesLoaded() async {
     if (_episodesLoaded) return;
     if (itemData == null || itemData!['Type'] != 'Episode') return;
-    final httpClient = HttpClient()
-      ..badCertificateCallback =
-          ServerCertificateTrust.acceptsInvalidCertificate;
+    final httpClient = HttpClient();
     try {
       final seriesId = itemData!['SeriesId'];
       if (seriesId == null) return;
@@ -918,6 +981,106 @@ class PlayerViewModel extends ChangeNotifier {
     return withoutExtension.replaceAll('_', ' ').trim();
   }
 
+  // ==========================================
+  // POMIJANIE INTRO / NAPISÓW (Intro Skipper)
+  // ==========================================
+  Future<void> _loadSkipSettings() async {
+    final storage = StorageService();
+    _showSkipButton = await storage.getSetting(
+      'setting_show_skip_button',
+      defaultValue: true,
+    );
+    _autoSkipIntro = await storage.getSetting(
+      'setting_auto_skip_intro',
+      defaultValue: false,
+    );
+    _autoSkipCredits = await storage.getSetting(
+      'setting_auto_skip_credits',
+      defaultValue: false,
+    );
+    _autoPlayNext = await storage.getSetting(
+      'setting_autoplay',
+      defaultValue: true,
+    );
+  }
+
+  Future<void> _loadSegments() async {
+    if (!_showSkipButton && !_autoSkipIntro && !_autoSkipCredits) return;
+    List<MediaSegment> loaded = const [];
+    try {
+      if (isOffline) {
+        final metadataFile = File('$originalUrl.json');
+        if (await metadataFile.exists()) {
+          final metadata = jsonDecode(await metadataFile.readAsString());
+          if (metadata is Map) {
+            loaded = MediaSegment.listFromJson(metadata['MediaSegments']);
+          }
+        }
+      } else if (baseUrl != null && token != null) {
+        loaded = MediaSegment.listFromJson(
+          await JellyfinApi().fetchMediaSegments(
+            baseUrl: baseUrl!,
+            token: token!,
+            itemId: itemId,
+          ),
+        );
+      }
+    } catch (error) {
+      debugPrint('Nie udało się wczytać segmentów (${error.runtimeType}).');
+    }
+    if (_isDisposed || loaded.isEmpty) return;
+    segments = loaded;
+    _positionSubscription ??= player.stream.position.listen(_onPosition);
+  }
+
+  void _onPosition(Duration position) {
+    if (_isDisposed || isLoading) return;
+    final segment = activeSegmentAt(segments, position);
+    if (segment != null && !_autoSkippedSegments.contains(segment.start)) {
+      final auto =
+          (segment.isIntroLike && _autoSkipIntro) ||
+          (segment.type == MediaSegmentType.outro && _autoSkipCredits);
+      if (auto) {
+        // Only once per segment: seeking back into it plays it normally.
+        _autoSkippedSegments.add(segment.start);
+        // Without autoplay, skipping credits automatically only seeks.
+        unawaited(skipSegment(segment, allowNextEpisode: _autoPlayNext));
+        return;
+      }
+    }
+    final visible = _showSkipButton ? segment : null;
+    if (!identical(visible, activeSegment)) {
+      activeSegment = visible;
+      notifyListeners();
+    }
+  }
+
+  /// Skips [segment] (the active one by default). Credits that run to the
+  /// end of the episode go straight to the next episode when there is one.
+  Future<void> skipSegment(
+    MediaSegment? segment, {
+    bool allowNextEpisode = true,
+  }) async {
+    final target = segment ?? activeSegment;
+    if (target == null || _isDisposed) return;
+    activeSegment = null;
+    notifyListeners();
+    final duration = player.state.duration;
+    final reachesEnd =
+        duration > Duration.zero &&
+        target.end >= duration - const Duration(seconds: 3);
+    if (target.type == MediaSegmentType.outro &&
+        reachesEnd &&
+        hasNextEpisode &&
+        allowNextEpisode) {
+      await skipToNext();
+      return;
+    }
+    var end = target.end;
+    if (duration > Duration.zero && end > duration) end = duration;
+    await player.seek(end);
+  }
+
   void _setError(String msg) {
     error = msg;
     isLoading = false;
@@ -931,18 +1094,11 @@ class PlayerViewModel extends ChangeNotifier {
   void dispose() {
     _isDisposed = true;
     _progressTimer?.cancel();
+    _positionSubscription?.cancel();
     final ownsAudioSession = audioHandler.isAttachedTo(player);
 
     if (!isOffline && baseUrl != null) {
-      JellyfinApi().reportPlaybackProgress(
-        baseUrl: baseUrl!,
-        token: token!,
-        userId: userId!,
-        itemId: itemId,
-        position: player.state.position,
-        isPaused: false,
-        isStopped: true,
-      );
+      _reportSessionStopped(position: player.state.position);
     } else if (isOffline) {
       unawaited(_recordOfflineProgress(stopped: true));
     }

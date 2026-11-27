@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_application_1/services/android_download_task_matcher.dart';
+import 'package:jellydawtyl/services/android_download_task_matcher.dart';
 
 void main() {
   const targetUrl = 'https://jellyfin.test/video/item/stream.mp4?Static=true';

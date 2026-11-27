@@ -1,7 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../config/app_config.dart';
+import '../services/ads_consent.dart';
 import '../services/storage_service.dart';
 
 class AdBannerWidget extends StatefulWidget {
@@ -18,10 +19,8 @@ class _AdBannerWidgetState extends State<AdBannerWidget> {
   bool _isCheckingPreference = true;
 
   final String _adUnitId = Platform.isAndroid
-      ? (dotenv.env['ADMOB_BANNER_ANDROID'] ??
-            'ca-app-pub-3940256099942544/6300978111')
-      : (dotenv.env['ADMOB_BANNER_IOS'] ??
-            'ca-app-pub-3940256099942544/2934735716');
+      ? AppConfig.admobBannerAndroid
+      : AppConfig.admobBannerIos;
 
   @override
   void initState() {
@@ -35,7 +34,7 @@ class _AdBannerWidgetState extends State<AdBannerWidget> {
 
     if (!mounted) return;
 
-    if (choice == 'yes') {
+    if (choice == 'yes' && adsSupportedOnThisPlatform) {
       setState(() {
         _adsEnabled = true;
         _isCheckingPreference = false;

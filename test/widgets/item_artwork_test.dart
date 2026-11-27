@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_application_1/models/movie.dart';
-import 'package:flutter_application_1/widgets/item_artwork.dart';
+import 'package:jellydawtyl/models/movie.dart';
+import 'package:jellydawtyl/widgets/item_artwork.dart';
 
 void main() {
   const base = 'https://jf.example';

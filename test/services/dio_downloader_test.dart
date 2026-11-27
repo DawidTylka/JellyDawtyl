@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_application_1/services/downloaders/dio_downloader.dart';
+import 'package:jellydawtyl/services/downloaders/dio_downloader.dart';
 
 void main() {
   late Directory directory;

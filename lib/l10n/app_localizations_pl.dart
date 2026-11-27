@@ -86,10 +86,11 @@ class AppLocalizationsPl extends AppLocalizations {
       'Zatrzymaj pobieranie przy użyciu danych komórkowych';
 
   @override
-  String get useNativeDownloader => 'Użyj menedżera Android';
+  String get useNativeDownloader => 'Powiadomienia pobierania';
 
   @override
-  String get useNativeDownloaderSub => 'Pobieraj w tle przez system';
+  String get useNativeDownloaderSub =>
+      'Pokazuj postęp pobierania w tle w powiadomieniu systemowym';
 
   @override
   String get privacy => 'Prywatność';
@@ -110,16 +111,16 @@ class AppLocalizationsPl extends AppLocalizations {
   String get noDescription => 'Brak opisu';
 
   @override
-  String get watchOnline => 'OGLĄDAJ ONLINE';
+  String get watchOnline => 'Oglądaj online';
 
   @override
-  String get watchOffline => 'OGLĄDAJ OFFLINE';
+  String get watchOffline => 'Oglądaj offline';
 
   @override
-  String get downloadToMemory => 'POBIERZ DO PAMIĘCI';
+  String get downloadToMemory => 'Pobierz do pamięci';
 
   @override
-  String get downloadAgain => 'POBIERZ PONOWNIE';
+  String get downloadAgain => 'Pobierz ponownie';
 
   @override
   String get downloadSeason => 'Pobierz sezon';
@@ -133,7 +134,16 @@ class AppLocalizationsPl extends AppLocalizations {
   String get allDownloaded => 'Wszystko już pobrane!';
 
   @override
-  String get deleteItems => 'Usuń elementy';
+  String deleteItems(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Usuń $count elementów',
+      few: 'Usuń $count elementy',
+      one: 'Usuń 1 element',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get deleteConfirm =>
@@ -377,4 +387,459 @@ class AppLocalizationsPl extends AppLocalizations {
 
   @override
   String get watchedUpdateError => 'Nie udało się zmienić stanu obejrzenia.';
+
+  @override
+  String get libraryLoadError =>
+      'Nie udało się wczytać biblioteki. Sprawdź połączenie z serwerem.';
+
+  @override
+  String get certificateTrustSaveError =>
+      'Nie udało się zapisać ustawienia certyfikatu.';
+
+  @override
+  String get loginCertificateError =>
+      'Certyfikat HTTPS serwera nie jest zaufany. Jeśli to Twój serwer z własnym certyfikatem, zaznacz „Zaufaj certyfikatowi HTTPS serwera”.';
+
+  @override
+  String get loginServerError =>
+      'Serwer zwrócił nieoczekiwaną odpowiedź. Sprawdź adres serwera.';
+
+  @override
+  String get insecureHttpWarning =>
+      'Ten adres używa nieszyfrowanego HTTP poza siecią lokalną. Hasło i token będą przesyłane jawnym tekstem. Użyj https://, jeśli serwer na to pozwala.';
+
+  @override
+  String get trustCertificateTitle => 'Zaufaj certyfikatowi HTTPS serwera';
+
+  @override
+  String get trustCertificateSub =>
+      'Użyj tylko dla serwera z własnym lub niezaufanym certyfikatem.';
+
+  @override
+  String get credentialStorageError =>
+      'Nie można odczytać zapisanych danych logowania. Twoje dane nie zostały usunięte. Spróbuj ponownie.';
+
+  @override
+  String get tryAgain => 'Spróbuj ponownie';
+
+  @override
+  String get serverUnreachable =>
+      'Nie można połączyć się z serwerem. Sprawdź połączenie z internetem lub czy serwer działa. Pobrane pliki są dostępne offline.';
+
+  @override
+  String get failedDownloadTitle => 'Nieudane pobieranie';
+
+  @override
+  String failedDownloadCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pobrań nie powiodło się.',
+      few: '$count pobrania nie powiodły się.',
+      one: '1 pobieranie nie powiodło się.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get failedDownloadRetryQuestion => 'Czy chcesz ponowić pobieranie?';
+
+  @override
+  String get no => 'Nie';
+
+  @override
+  String get retry => 'Ponów';
+
+  @override
+  String get playerTlsVerify => 'Weryfikuj certyfikat TLS w odtwarzaczu';
+
+  @override
+  String get playerTlsVerifySub =>
+      'Odtwarzacz sprawdza certyfikat HTTPS serwera (pomija serwery oznaczone jako zaufane). Wyłącz, jeśli odtwarzanie przez HTTPS przestało działać.';
+
+  @override
+  String get introSkipperSection => 'Pomijanie intro (Intro Skipper)';
+
+  @override
+  String get showSkipButton => 'Przycisk pomijania';
+
+  @override
+  String get showSkipButtonSub =>
+      'Pokazuj „Pomiń intro” i podobne przyciski, gdy serwer zna segmenty odcinka (wtyczka Intro Skipper lub segmenty Jellyfin 10.10+)';
+
+  @override
+  String get autoSkipIntro => 'Automatycznie pomijaj intro i podsumowanie';
+
+  @override
+  String get autoSkipIntroSub => 'Przewija od razu, bez naciskania przycisku';
+
+  @override
+  String get autoSkipCredits => 'Automatycznie pomijaj napisy końcowe';
+
+  @override
+  String get autoSkipCreditsSub =>
+      'Po napisach końcowych przechodzi do następnego odcinka, jeśli jest';
+
+  @override
+  String selectedCount(int count) {
+    return 'Zaznaczono: $count';
+  }
+
+  @override
+  String get searchDownloadsHint => 'Szukaj pobranych...';
+
+  @override
+  String get skipIntro => 'Pomiń intro';
+
+  @override
+  String get skipCredits => 'Pomiń napisy końcowe';
+
+  @override
+  String get skipRecap => 'Pomiń podsumowanie';
+
+  @override
+  String get skipPreview => 'Pomiń zapowiedź';
+
+  @override
+  String get skipCommercial => 'Pomiń reklamę';
+
+  @override
+  String get previousEpisode => 'Poprzedni odcinek';
+
+  @override
+  String get nextEpisode => 'Następny odcinek';
+
+  @override
+  String get serverPanelNoServer => 'Najpierw zaloguj się do serwera.';
+
+  @override
+  String unwantedSnoozedUntil(String date) {
+    return 'do $date';
+  }
+
+  @override
+  String get unwantedUntilNewEpisode => 'do nowego odcinka';
+
+  @override
+  String get unwantedSnoozed => 'Uśpiony';
+
+  @override
+  String get undo => 'Cofnij';
+
+  @override
+  String get unwantedError => 'Nie udało się zmienić listy. Spróbuj ponownie.';
+
+  @override
+  String unwantedWatchLaterAdded(String name) {
+    return 'Dodano „$name” do „Na później”';
+  }
+
+  @override
+  String unwantedWatchLaterRemoved(String name) {
+    return 'Usunięto „$name” z „Na później”';
+  }
+
+  @override
+  String unwantedMarked(String name) {
+    return '„$name” → Nieulubione. Zniknie z list do oglądania.';
+  }
+
+  @override
+  String unwantedRestored(String name) {
+    return 'Przywrócono „$name”';
+  }
+
+  @override
+  String unwantedSnoozeTitle(String name) {
+    return 'Uśpij „$name”';
+  }
+
+  @override
+  String get unwantedSnoozeHint =>
+      'Uśpiony serial znika z „Następne” i wraca sam po wybranym czasie.';
+
+  @override
+  String get unwantedWake => 'Obudź teraz';
+
+  @override
+  String get unwantedSnoozeNewEpisode => 'Do nowego odcinka';
+
+  @override
+  String unwantedSnoozeDays(int days) {
+    return 'Na $days dni';
+  }
+
+  @override
+  String unwantedWoken(String name) {
+    return 'Obudzono „$name”';
+  }
+
+  @override
+  String unwantedSnoozedMessage(String name) {
+    return 'Uśpiono „$name”';
+  }
+
+  @override
+  String get unwantedWatchLater => 'Na później';
+
+  @override
+  String get unwantedSnooze => 'Uśpij';
+
+  @override
+  String get unwantedNotInterested => 'Nieulubione';
+
+  @override
+  String unwantedAppliesToSeries(String name) {
+    return 'Dotyczy całego serialu „$name”';
+  }
+
+  @override
+  String get unwantedSnoozedList => 'Uśpione';
+
+  @override
+  String get unwantedEmptyWatchLater =>
+      'Lista „Na później” jest pusta. Dodaj film lub serial przyciskiem „Na później” na jego stronie.';
+
+  @override
+  String get unwantedEmptySnoozed =>
+      'Nic nie śpi. Uśpij serial, żeby na jakiś czas zniknął z „Następne”.';
+
+  @override
+  String get unwantedEmptyUnwanted =>
+      'Brak nieulubionych. Oznacz serial lub film kciukiem w dół na jego stronie.';
+
+  @override
+  String unwantedAddedOn(String date) {
+    return 'Dodano $date';
+  }
+
+  @override
+  String get unwantedRemoveWatchLater => 'Usuń z „Na później”';
+
+  @override
+  String get unwantedRestore => 'Przywróć';
+
+  @override
+  String get unwantedMyLists => 'Moje listy';
+
+  @override
+  String durationHoursMinutes(int hours, int minutes) {
+    return '$hours godz. $minutes min';
+  }
+
+  @override
+  String durationMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String seasonEpisodeLabel(int season, int episode) {
+    return 'Sezon $season · Odcinek $episode';
+  }
+
+  @override
+  String seasonEpisodeShort(int season, int episode) {
+    return 'S$season O$episode';
+  }
+
+  @override
+  String endsAt(String time) {
+    return 'Koniec o $time';
+  }
+
+  @override
+  String timeLeft(String duration) {
+    return 'Zostało $duration';
+  }
+
+  @override
+  String subtitleCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count napisów',
+      many: '$count napisów',
+      few: '$count napisy',
+      one: '1 napisy',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get watched => 'Obejrzane';
+
+  @override
+  String get downloadedBadge => 'Pobrane';
+
+  @override
+  String get showMore => 'Pokaż więcej';
+
+  @override
+  String get showLess => 'Pokaż mniej';
+
+  @override
+  String get directedBy => 'Reżyseria';
+
+  @override
+  String get writtenBy => 'Scenariusz';
+
+  @override
+  String get studio => 'Studio';
+
+  @override
+  String get cast => 'Obsada';
+
+  @override
+  String get chapters => 'Rozdziały';
+
+  @override
+  String chapterNumber(int number) {
+    return 'Rozdział $number';
+  }
+
+  @override
+  String get moreEpisodes => 'Inne odcinki';
+
+  @override
+  String get technicalDetails => 'Informacje techniczne';
+
+  @override
+  String get mediaContainer => 'Kontener';
+
+  @override
+  String get mediaFileSize => 'Rozmiar';
+
+  @override
+  String get mediaBitrate => 'Bitrate';
+
+  @override
+  String get mediaVideo => 'Wideo';
+
+  @override
+  String get mediaAudio => 'Dźwięk';
+
+  @override
+  String get cancelDownload => 'Anuluj pobieranie';
+
+  @override
+  String get favoritesAll => 'Wszystkie';
+
+  @override
+  String get favoritesMovies => 'Filmy';
+
+  @override
+  String get favoritesSeries => 'Seriale';
+
+  @override
+  String get favoritesEpisodes => 'Odcinki';
+
+  @override
+  String get sortBy => 'Sortuj';
+
+  @override
+  String get sortName => 'Nazwa';
+
+  @override
+  String get sortDateAdded => 'Ostatnio dodane';
+
+  @override
+  String get sortPremiere => 'Data premiery';
+
+  @override
+  String get sortRating => 'Ocena';
+
+  @override
+  String get noFavorites => 'Brak ulubionych';
+
+  @override
+  String get noFavoritesHint =>
+      'Dotknij serca na filmie, serialu lub odcinku, żeby go tu dodać.';
+
+  @override
+  String get noFavoritesInFilter => 'Brak ulubionych w tej kategorii.';
+
+  @override
+  String get loadError => 'Nie udało się wczytać danych z serwera.';
+
+  @override
+  String get search => 'Szukaj';
+
+  @override
+  String get searchEverywhereHint => 'Szukaj filmów, seriali i odcinków';
+
+  @override
+  String noSearchResults(String query) {
+    return 'Nic nie znaleziono dla „$query”';
+  }
+
+  @override
+  String get searchStartTyping => 'Wpisz co najmniej 2 znaki.';
+
+  @override
+  String episodeOf(String series, int season, int episode) {
+    return '$series · S$season O$episode';
+  }
+
+  @override
+  String get unwantedSnoozeOneDay => 'Na 1 dzień';
+
+  @override
+  String get unwantedSnoozeWeek => 'Na tydzień';
+
+  @override
+  String get unwantedSnoozeTwoWeeks => 'Na 2 tygodnie';
+
+  @override
+  String get unwantedSnoozeMonth => 'Na miesiąc';
+
+  @override
+  String get unwantedSnoozeThreeMonths => 'Na 3 miesiące';
+
+  @override
+  String get noEpisodes => 'Ten serial nie ma jeszcze odcinków.';
+
+  @override
+  String get specials => 'Odcinki specjalne';
+
+  @override
+  String seasonNumber(int number) {
+    return 'Sezon $number';
+  }
+
+  @override
+  String get download => 'Pobierz';
+
+  @override
+  String get playNext => 'Odtwórz';
+
+  @override
+  String episodeNumber(int number) {
+    return 'Odcinek $number';
+  }
+
+  @override
+  String searchInLibraryHint(String library) {
+    return 'Szukaj w: $library';
+  }
+
+  @override
+  String downloadsInProgress(int count) {
+    return 'Pobieranie ($count)';
+  }
+
+  @override
+  String get selectAll => 'Zaznacz wszystko';
+
+  @override
+  String get selectItems => 'Zaznacz do usunięcia';
+
+  @override
+  String get refresh => 'Odśwież';
+
+  @override
+  String get noOfflineFilesHint =>
+      'Na stronie filmu lub odcinka wybierz „Pobierz do pamięci”, a na stronie serialu „Pobierz sezon”.';
+
+  @override
+  String get general => 'Ogólne';
 }

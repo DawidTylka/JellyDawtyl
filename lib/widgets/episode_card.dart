@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:io';
+import '../l10n/app_localizations.dart';
 import '../models/episode.dart';
 import 'favorite_button.dart';
 import '../utils/html_description.dart';
@@ -161,7 +162,15 @@ class EpisodeCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "Odcinek ${episode.indexNumber}",
+                        [
+                          AppLocalizations.of(
+                            context,
+                          )!.episodeNumber(episode.indexNumber ?? 0),
+                          if ((episode.runTimeTicks ?? 0) > 0)
+                            AppLocalizations.of(context)!.durationMinutes(
+                              (episode.runTimeTicks! / 600000000).round(),
+                            ),
+                        ].join(' · '),
                         style: const TextStyle(
                           color: Colors.deepPurpleAccent,
                           fontSize: 12,

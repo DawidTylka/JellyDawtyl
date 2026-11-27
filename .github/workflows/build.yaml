@@ -6,28 +6,63 @@ on:
       - main
     tags:
       - 'v*'
+  pull_request:
+
+# Akcje są przypięte do SHA commitów (komentarz podaje tag), a Flutter do
+# konkretnej wersji, żeby build nie zmieniał się sam z wydaniem nowej wersji.
+env:
+  FLUTTER_VERSION: '3.41.9'
 
 jobs:
+  # ---------------------------------------------------
+  # 0. ANALIZA I TESTY (każdy push, tag i pull request)
+  # ---------------------------------------------------
+  analyze-test:
+    name: Analyze & test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Pobieranie kodu
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Konfiguracja Fluttera
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: 'stable'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Pobieranie paczek (pub get)
+        run: flutter pub get
+
+      - name: Analiza kodu
+        run: flutter analyze --no-fatal-infos lib test
+
+      - name: Testy
+        run: flutter test --coverage
+
   # ---------------------------------------------------
   # 1. BUDOWANIE DLA ANDROIDA I LINUXA (push na main)
   # ---------------------------------------------------
   build-android-linux:
     name: Build Android & Linux
-    if: github.ref_type == 'branch'
+    if: github.event_name == 'push' && github.ref_type == 'branch'
+    needs: analyze-test
     runs-on: ubuntu-latest
 
     steps:
       - name: Pobieranie kodu
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Instalacja Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: 'zulu'
           java-version: '17'
+          cache: 'gradle'
 
       - name: Konfiguracja Android SDK
-        uses: android-actions/setup-android@v4
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
 
       - name: Instalacja zależności Linux
         run: |
@@ -35,11 +70,15 @@ jobs:
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev jq libsecret-1-dev libjsoncpp-dev libasound2-dev libmpv-dev lld
 
       - name: Konfiguracja Fluttera
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: 'stable'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
 
-      # Przygotowanie plików z Twoich GitHub Secrets
+      # Przygotowanie plików z GitHub Secrets. .env czyta Gradle (identyfikator
+      # aplikacji AdMob) i --dart-define-from-file (identyfikatory reklam);
+      # nie jest już pakowany do aplikacji jako asset.
       - name: Odtwórz plik .env
         run: echo "${{ secrets.ENV_FILE }}" > .env
 
@@ -51,33 +90,31 @@ jobs:
       - name: Pobieranie paczek (pub get)
         run: flutter pub get
 
-      # Budowanie wszystkich wersji Androida
       - name: Budowanie Android APK
-        run: flutter build apk --release
+        run: flutter build apk --release --dart-define-from-file=.env
 
       - name: Budowanie Android App Bundle
-        run: flutter build appbundle --release
+        run: flutter build appbundle --release --dart-define-from-file=.env
 
-      # Budowanie wersji na Linuxa
       - name: Budowanie Linux App
-        run: flutter build linux --release
+        run: flutter build linux --release --dart-define-from-file=.env
 
       # --- UDOSTĘPNIANIE ARTEFAKTÓW ---
-      
+
       - name: Zapamiętaj plik APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Android-APK
           path: build/app/outputs/flutter-apk/app-release.apk
 
       - name: Zapamiętaj plik App Bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Android-AppBundle
           path: build/app/outputs/bundle/release/app-release.aab
 
       - name: Zapamiętaj paczkę Linux
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Linux-App
           path: build/linux/x64/release/bundle/
@@ -88,6 +125,7 @@ jobs:
   release:
     name: Release APK (no SDK)
     if: startsWith(github.ref, 'refs/tags/v')
+    needs: analyze-test
     runs-on: ubuntu-latest
 
     permissions:
@@ -95,20 +133,23 @@ jobs:
 
     steps:
       - name: Pobieranie kodu
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Instalacja Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: 'zulu'
           java-version: '17'
+          cache: 'gradle'
 
       # Pominięto: Konfiguracja Android SDK (używa pre-instalowanego SDK)
 
       - name: Konfiguracja Fluttera
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: 'stable'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
 
       - name: Odtwórz plik .env
         run: echo "${{ secrets.ENV_FILE }}" > .env
@@ -122,16 +163,16 @@ jobs:
         run: flutter pub get
 
       - name: Budowanie APK
-        run: flutter build apk --release
+        run: flutter build apk --release --dart-define-from-file=.env
 
       - name: Zapamiętaj plik APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Android-APK-Release
           path: build/app/outputs/flutter-apk/app-release.apk
 
       - name: Utwórz GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ github.ref_name }}
           name: JellyDawtyl ${{ github.ref_name }}

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import '../screens/details_screen.dart';
-import '../screens/series_details_screen.dart';
+import '../screens/item_navigation.dart';
 import '../screens/category_items_screen.dart';
 import '../models/jellyfin_item.dart';
 import 'desktop_horizontal_list_view.dart';
@@ -17,6 +16,9 @@ class JellyfinSection extends StatelessWidget {
   final double aspectRatio;
   final bool showShowAllButton;
 
+  /// Passed on to the "show all" screen so it can page through the list.
+  final ItemPageLoader? pageLoader;
+
   const JellyfinSection({
     super.key,
     required this.title,
@@ -27,6 +29,7 @@ class JellyfinSection extends StatelessWidget {
     this.onRefresh,
     this.aspectRatio = 2 / 3,
     this.showShowAllButton = true,
+    this.pageLoader,
   });
 
   double _getCardWidth(double width) {
@@ -89,6 +92,7 @@ class JellyfinSection extends StatelessWidget {
                           baseUrl: cleanUrl,
                           token: token,
                           userId: userId,
+                          pageLoader: pageLoader,
                         ),
                       ),
                     );
@@ -127,26 +131,12 @@ class JellyfinSection extends StatelessWidget {
               cursor: SystemMouseCursors.click,
               child: GestureDetector(
                 onTap: () async {
-                  Widget nextScreen;
-                  if (item.type == "Series") {
-                    nextScreen = SeriesDetailsScreen(
-                      series: item,
-                      baseUrl: cleanUrl,
-                      token: token,
-                      userId: userId,
-                    );
-                  } else {
-                    nextScreen = DetailsScreen(
-                      item: item,
-                      baseUrl: cleanUrl,
-                      token: token,
-                      userId: userId,
-                    );
-                  }
-
-                  await Navigator.push(
+                  await openItemDetails(
                     context,
-                    MaterialPageRoute(builder: (context) => nextScreen),
+                    item,
+                    baseUrl: cleanUrl,
+                    token: token,
+                    userId: userId,
                   );
 
                   if (onRefresh != null) onRefresh!();

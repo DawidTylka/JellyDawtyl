@@ -4,15 +4,15 @@ import 'package:media_kit/media_kit.dart';
 
 class MyAudioHandler extends BaseAudioHandler with SeekHandler {
   Player? _player;
-  StreamSubscription? _playingSub;
-  StreamSubscription? _positionSub;
-  StreamSubscription? _bufferSub;
-  StreamSubscription? _durationSub;
+  StreamSubscription<dynamic>? _playingSub;
+  StreamSubscription<dynamic>? _positionSub;
+  StreamSubscription<dynamic>? _bufferSub;
+  StreamSubscription<dynamic>? _durationSub;
 
   Function()? onSkipToNextLocal;
   Function()? onSkipToPreviousLocal;
 
-  // --- ZMIANA 1: Zmienne przechowujące dostępność odcinków ---
+  // Dostępność poprzedniego/następnego odcinka dla przycisków powiadomienia.
   bool _hasPreviousEpisode = false;
   bool _hasNextEpisode = false;
 
@@ -33,17 +33,41 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
     _playingSub = _player!.stream.playing.listen(
       (playing) => _broadcastState(playing: playing),
     );
-    _positionSub = _player!.stream.position.listen(
-      (position) => _broadcastState(position: position),
-    );
-    _bufferSub = _player!.stream.buffer.listen(
-      (buffer) => _broadcastState(bufferedPosition: buffer),
-    );
+    _positionSub = _player!.stream.position.listen((position) {
+      if (_shouldBroadcastPosition(position)) {
+        _broadcastState(position: position);
+      }
+    });
+    _bufferSub = _player!.stream.buffer.listen((buffer) {
+      if (_shouldBroadcastPosition(_player?.state.position ?? Duration.zero)) {
+        _broadcastState(bufferedPosition: buffer);
+      }
+    });
     _durationSub = _player!.stream.duration.listen((dur) {
       if (dur.inSeconds > 0) {
         mediaItem.add(mediaItem.value?.copyWith(duration: dur));
       }
     });
+  }
+
+  // mpv reports the position many times a second; every report used to send
+  // a full PlaybackState over the platform channel. The notification only
+  // needs about one update per second, plus an immediate one after a seek.
+  static const _positionBroadcastInterval = Duration(seconds: 1);
+  DateTime _lastPositionBroadcastAt = DateTime.fromMillisecondsSinceEpoch(0);
+  Duration _lastBroadcastPosition = Duration.zero;
+
+  bool _shouldBroadcastPosition(Duration position) {
+    final now = DateTime.now();
+    final jumped =
+        (position - _lastBroadcastPosition).abs() > const Duration(seconds: 2);
+    if (!jumped &&
+        now.difference(_lastPositionBroadcastAt) < _positionBroadcastInterval) {
+      return false;
+    }
+    _lastPositionBroadcastAt = now;
+    _lastBroadcastPosition = position;
+    return true;
   }
 
   bool isAttachedTo(Player player) => identical(_player, player);

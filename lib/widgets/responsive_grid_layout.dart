@@ -21,6 +21,7 @@ class ResponsiveGridLayout extends StatelessWidget {
                 : (constraints.maxWidth > 500 ? 3 : 2));
 
         return GridView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(12),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
@@ -34,4 +35,4 @@ class ResponsiveGridLayout extends StatelessWidget {
       },
     );
   }
-}
+}

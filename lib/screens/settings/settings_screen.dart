@@ -5,8 +5,11 @@ import '../../services/storage_service.dart';
 import '../../widgets/ad_banner_widget.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../../l10n/app_localizations.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../../services/ads_consent.dart';
+import '../../services/jellyfin_api.dart';
+import '../../services/playback_sync_service.dart';
 import '../../main.dart';
+import '../player/player_tls.dart';
 import 'admin_web_view_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
@@ -28,6 +31,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _downloadWifiOnly = true;
   bool _useNativeDownloader = false;
   bool _showAds = false;
+  bool _showSkipButton = true;
+  bool _autoSkipIntro = false;
+  bool _autoSkipCredits = false;
+  bool _playerTlsVerify = true;
   int _maxConcurrentValue = 3;
 
   String? _customDownloadPath;
@@ -62,6 +69,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
       defaultValue: false,
     );
 
+    final showSkipButton = await _storage.getSetting(
+      'setting_show_skip_button',
+      defaultValue: true,
+    );
+    final autoSkipIntro = await _storage.getSetting(
+      'setting_auto_skip_intro',
+      defaultValue: false,
+    );
+    final autoSkipCredits = await _storage.getSetting(
+      'setting_auto_skip_credits',
+      defaultValue: false,
+    );
+    final playerTlsVerify = await _storage.getSetting(
+      playerTlsVerifySettingKey,
+      defaultValue: playerTlsVerifyDefault,
+    );
+
     final maxConcurrent = await _storage.getInt(
       'setting_max_concurrent_downloads',
       defaultValue: 1,
@@ -77,7 +101,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final adsChoice = await _storage.getString('setting_ads_choice');
     final languageCode = await _storage.getString('setting_language') ?? 'pl';
 
+    if (!mounted) return;
     setState(() {
+      _showSkipButton = showSkipButton;
+      _autoSkipIntro = autoSkipIntro;
+      _autoSkipCredits = autoSkipCredits;
+      _playerTlsVerify = playerTlsVerify;
       _autoPlayNext = autoPlay;
       _backgroundPlayback = backgroundPlayback;
       _downloadWifiOnly = wifiOnly;
@@ -155,6 +184,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _customDownloadPath = selectedDirectory;
       });
       await _storage.saveString('setting_download_path', selectedDirectory);
+      DownloadService().invalidateDirectoryPathCache();
 
       if (mounted) {
         ScaffoldMessenger.of(
@@ -169,6 +199,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _customDownloadPath = null;
     });
     await _storage.saveString('setting_download_path', '');
+    DownloadService().invalidateDirectoryPathCache();
   }
 
   @override
@@ -212,6 +243,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
           : ListView(
               padding: const EdgeInsets.symmetric(vertical: 16),
               children: [
+                _buildSectionTitle(l10n.general),
+                ListTile(
+                  title: Text(l10n.language),
+                  subtitle: Text(l10n.languageSelectionSubtitle),
+                  trailing: DropdownButton<String>(
+                    value: _selectedLanguage,
+                    dropdownColor: const Color(0xFF1C1C1E),
+                    underline: const SizedBox(),
+                    style: const TextStyle(color: Colors.white),
+                    items: [
+                      DropdownMenuItem(
+                        value: 'pl',
+                        child: Text(l10n.languagePolish),
+                      ),
+                      DropdownMenuItem(
+                        value: 'en',
+                        child: Text(l10n.languageEnglish),
+                      ),
+                    ],
+                    onChanged: (value) async {
+                      if (value == null) return;
+
+                      final currentContext = context;
+                      await _storage.saveString('setting_language', value);
+
+                      if (!mounted) return;
+
+                      setState(() => _selectedLanguage = value);
+
+                      if (currentContext.mounted) {
+                        RestartWidget.restartApp(currentContext);
+                      }
+                    },
+                  ),
+                ),
+
                 _buildSectionTitle(l10n.playback),
                 SwitchListTile(
                   title: Text(l10n.autoPlay),
@@ -230,6 +297,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   activeThumbColor: Colors.deepPurpleAccent,
                   value: _backgroundPlayback,
                   onChanged: _updateBackgroundPlayback,
+                ),
+                SwitchListTile(
+                  title: Text(l10n.playerTlsVerify),
+                  subtitle: Text(l10n.playerTlsVerifySub),
+                  activeThumbColor: Colors.deepPurpleAccent,
+                  value: _playerTlsVerify,
+                  onChanged: (val) => _updateSetting(
+                    playerTlsVerifySettingKey,
+                    val,
+                    (v) => _playerTlsVerify = v,
+                  ),
+                ),
+
+                const Divider(height: 32, color: Colors.white24),
+
+                _buildSectionTitle(l10n.introSkipperSection),
+                SwitchListTile(
+                  title: Text(l10n.showSkipButton),
+                  subtitle: Text(l10n.showSkipButtonSub),
+                  activeThumbColor: Colors.deepPurpleAccent,
+                  value: _showSkipButton,
+                  onChanged: (val) => _updateSetting(
+                    'setting_show_skip_button',
+                    val,
+                    (v) => _showSkipButton = v,
+                  ),
+                ),
+                SwitchListTile(
+                  title: Text(l10n.autoSkipIntro),
+                  subtitle: Text(l10n.autoSkipIntroSub),
+                  activeThumbColor: Colors.deepPurpleAccent,
+                  value: _autoSkipIntro,
+                  onChanged: (val) => _updateSetting(
+                    'setting_auto_skip_intro',
+                    val,
+                    (v) => _autoSkipIntro = v,
+                  ),
+                ),
+                SwitchListTile(
+                  title: Text(l10n.autoSkipCredits),
+                  subtitle: Text(l10n.autoSkipCreditsSub),
+                  activeThumbColor: Colors.deepPurpleAccent,
+                  value: _autoSkipCredits,
+                  onChanged: (val) => _updateSetting(
+                    'setting_auto_skip_credits',
+                    val,
+                    (v) => _autoSkipCredits = v,
+                  ),
                 ),
 
                 const Divider(height: 32, color: Colors.white24),
@@ -310,203 +425,194 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
 
-                ListTile(
-                  title: Text(l10n.language),
-                  subtitle: Text(l10n.languageSelectionSubtitle),
-                  trailing: DropdownButton<String>(
-                    value: _selectedLanguage,
-                    dropdownColor: const Color(0xFF1C1C1E),
-                    underline: const SizedBox(),
-                    style: const TextStyle(color: Colors.white),
-                    items: [
-                      DropdownMenuItem(
-                        value: 'pl',
-                        child: Text(l10n.languagePolish),
-                      ),
-                      DropdownMenuItem(
-                        value: 'en',
-                        child: Text(l10n.languageEnglish),
-                      ),
-                    ],
-                    onChanged: (value) async {
-                      if (value == null) return;
-
-                      final currentContext = context;
-                      await _storage.saveString('setting_language', value);
-
-                      if (!mounted) return;
-
-                      setState(() => _selectedLanguage = value);
-
-                      if (currentContext.mounted) {
-                        RestartWidget.restartApp(currentContext);
-                      }
-                    },
-                  ),
-                ),
-
-                SwitchListTile(
-                  title: Text(l10n.useNativeDownloader),
-                  subtitle: Text(l10n.useNativeDownloaderSub),
-                  activeThumbColor: Colors.deepPurpleAccent,
-                  value: _useNativeDownloader,
-                  onChanged: (val) => _updateSetting(
-                    'setting_native_downloader',
-                    val,
-                    (v) => _useNativeDownloader = v,
-                  ),
-                ),
-
-                _buildSectionTitle(l10n.advancedTranscoding),
-
-                ListTile(
-                  title: Text(l10n.hwAccelTitle),
-                  subtitle: Text(l10n.hwAccelSub),
-                  trailing: DropdownButton<String>(
-                    value: _hwAccelValue,
-                    dropdownColor: const Color(0xFF1C1C1E),
-                    underline: const SizedBox(),
-                    style: const TextStyle(color: Colors.white),
-                    items: [
-                      DropdownMenuItem(
-                        value: 'auto',
-                        child: Text(l10n.autoServer),
-                      ),
-                      const DropdownMenuItem(
-                        value: 'Vaapi',
-                        child: Text("VAAPI (Linux/Intel)"),
-                      ),
-                      const DropdownMenuItem(
-                        value: 'Nvenc',
-                        child: Text("NVENC (Nvidia)"),
-                      ),
-                      const DropdownMenuItem(
-                        value: 'Qsv',
-                        child: Text("QSV (Intel)"),
-                      ),
-                      const DropdownMenuItem(
-                        value: 'VideoToolbox',
-                        child: Text("VideoToolbox (Mac)"),
-                      ),
-                    ],
-                    onChanged: (val) => _saveStringSetting(
-                      'setting_hw_accel',
-                      val!,
-                      (v) => _hwAccelValue = v,
+                if (Platform.isAndroid)
+                  SwitchListTile(
+                    title: Text(l10n.useNativeDownloader),
+                    subtitle: Text(l10n.useNativeDownloaderSub),
+                    activeThumbColor: Colors.deepPurpleAccent,
+                    value: _useNativeDownloader,
+                    onChanged: (val) => _updateSetting(
+                      'setting_native_downloader',
+                      val,
+                      (v) => _useNativeDownloader = v,
                     ),
                   ),
-                ),
 
-                ListTile(
-                  title: Text(l10n.cpuLimitTitle),
-                  subtitle: Text(l10n.cpuLimitSub),
-                  trailing: DropdownButton<String>(
-                    value: _cpuLimitValue,
-                    dropdownColor: const Color(0xFF1C1C1E),
-                    underline: const SizedBox(),
-                    style: const TextStyle(color: Colors.white),
-                    items: [
-                      DropdownMenuItem(
-                        value: 'auto',
-                        child: Text(l10n.autoNoLimit),
+                // Server-side transcoding knobs: rarely needed, so collapsed.
+                ExpansionTile(
+                  leading: const Icon(Icons.tune),
+                  title: Text(l10n.advancedTranscoding),
+                  children: [
+                    ListTile(
+                      title: Text(l10n.hwAccelTitle),
+                      subtitle: Text(l10n.hwAccelSub),
+                      trailing: DropdownButton<String>(
+                        value: _hwAccelValue,
+                        dropdownColor: const Color(0xFF1C1C1E),
+                        underline: const SizedBox(),
+                        style: const TextStyle(color: Colors.white),
+                        items: [
+                          DropdownMenuItem(
+                            value: 'auto',
+                            child: Text(l10n.autoServer),
+                          ),
+                          const DropdownMenuItem(
+                            value: 'Vaapi',
+                            child: Text("VAAPI (Linux/Intel)"),
+                          ),
+                          const DropdownMenuItem(
+                            value: 'Nvenc',
+                            child: Text("NVENC (Nvidia)"),
+                          ),
+                          const DropdownMenuItem(
+                            value: 'Qsv',
+                            child: Text("QSV (Intel)"),
+                          ),
+                          const DropdownMenuItem(
+                            value: 'VideoToolbox',
+                            child: Text("VideoToolbox (Mac)"),
+                          ),
+                        ],
+                        onChanged: (val) => _saveStringSetting(
+                          'setting_hw_accel',
+                          val!,
+                          (v) => _hwAccelValue = v,
+                        ),
                       ),
-                      DropdownMenuItem(value: '1', child: Text(l10n.core1)),
-                      DropdownMenuItem(value: '2', child: Text(l10n.cores2)),
-                      DropdownMenuItem(value: '4', child: Text(l10n.cores4)),
-                      DropdownMenuItem(value: '8', child: Text(l10n.cores8)),
-                    ],
-                    onChanged: (val) => _saveStringSetting(
-                      'setting_cpu_limit',
-                      val!,
-                      (v) => _cpuLimitValue = v,
                     ),
-                  ),
-                ),
 
-                ListTile(
-                  title: Text(l10n.fpsLimitTitle),
-                  subtitle: Text(l10n.fpsLimitSub),
-                  trailing: DropdownButton<String>(
-                    value: _maxFpsValue,
-                    dropdownColor: const Color(0xFF1C1C1E),
-                    underline: const SizedBox(),
-                    style: const TextStyle(color: Colors.white),
-                    items: [
-                      DropdownMenuItem(
-                        value: 'auto',
-                        child: Text(l10n.autoOriginal),
+                    ListTile(
+                      title: Text(l10n.cpuLimitTitle),
+                      subtitle: Text(l10n.cpuLimitSub),
+                      trailing: DropdownButton<String>(
+                        value: _cpuLimitValue,
+                        dropdownColor: const Color(0xFF1C1C1E),
+                        underline: const SizedBox(),
+                        style: const TextStyle(color: Colors.white),
+                        items: [
+                          DropdownMenuItem(
+                            value: 'auto',
+                            child: Text(l10n.autoNoLimit),
+                          ),
+                          DropdownMenuItem(value: '1', child: Text(l10n.core1)),
+                          DropdownMenuItem(
+                            value: '2',
+                            child: Text(l10n.cores2),
+                          ),
+                          DropdownMenuItem(
+                            value: '4',
+                            child: Text(l10n.cores4),
+                          ),
+                          DropdownMenuItem(
+                            value: '8',
+                            child: Text(l10n.cores8),
+                          ),
+                        ],
+                        onChanged: (val) => _saveStringSetting(
+                          'setting_cpu_limit',
+                          val!,
+                          (v) => _cpuLimitValue = v,
+                        ),
                       ),
-                      DropdownMenuItem(value: '24', child: Text(l10n.fps24)),
-                      DropdownMenuItem(value: '30', child: Text(l10n.fps30)),
-                      DropdownMenuItem(value: '60', child: Text(l10n.fps60)),
-                    ],
-                    onChanged: (val) => _saveStringSetting(
-                      'setting_max_fps',
-                      val!,
-                      (v) => _maxFpsValue = v,
                     ),
-                  ),
-                ),
 
-                ListTile(
-                  title: Text(l10n.audioQualityTitle),
-                  subtitle: Text(l10n.audioQualitySub),
-                  trailing: DropdownButton<String>(
-                    value: _audioBitrateValue,
-                    dropdownColor: const Color(0xFF1C1C1E),
-                    underline: const SizedBox(),
-                    style: const TextStyle(color: Colors.white),
-                    items: [
-                      DropdownMenuItem(
-                        value: 'auto',
-                        child: Text(l10n.autoOriginal),
+                    ListTile(
+                      title: Text(l10n.fpsLimitTitle),
+                      subtitle: Text(l10n.fpsLimitSub),
+                      trailing: DropdownButton<String>(
+                        value: _maxFpsValue,
+                        dropdownColor: const Color(0xFF1C1C1E),
+                        underline: const SizedBox(),
+                        style: const TextStyle(color: Colors.white),
+                        items: [
+                          DropdownMenuItem(
+                            value: 'auto',
+                            child: Text(l10n.autoOriginal),
+                          ),
+                          DropdownMenuItem(
+                            value: '24',
+                            child: Text(l10n.fps24),
+                          ),
+                          DropdownMenuItem(
+                            value: '30',
+                            child: Text(l10n.fps30),
+                          ),
+                          DropdownMenuItem(
+                            value: '60',
+                            child: Text(l10n.fps60),
+                          ),
+                        ],
+                        onChanged: (val) => _saveStringSetting(
+                          'setting_max_fps',
+                          val!,
+                          (v) => _maxFpsValue = v,
+                        ),
                       ),
-                      DropdownMenuItem(
-                        value: '320000',
-                        child: Text(l10n.audio320),
-                      ),
-                      DropdownMenuItem(
-                        value: '192000',
-                        child: Text(l10n.audio192),
-                      ),
-                      DropdownMenuItem(
-                        value: '128000',
-                        child: Text(l10n.audio128),
-                      ),
-                      DropdownMenuItem(
-                        value: '96000',
-                        child: Text(l10n.audio96),
-                      ),
-                    ],
-                    onChanged: (val) => _saveStringSetting(
-                      'setting_audio_bitrate',
-                      val!,
-                      (v) => _audioBitrateValue = v,
                     ),
-                  ),
+
+                    ListTile(
+                      title: Text(l10n.audioQualityTitle),
+                      subtitle: Text(l10n.audioQualitySub),
+                      trailing: DropdownButton<String>(
+                        value: _audioBitrateValue,
+                        dropdownColor: const Color(0xFF1C1C1E),
+                        underline: const SizedBox(),
+                        style: const TextStyle(color: Colors.white),
+                        items: [
+                          DropdownMenuItem(
+                            value: 'auto',
+                            child: Text(l10n.autoOriginal),
+                          ),
+                          DropdownMenuItem(
+                            value: '320000',
+                            child: Text(l10n.audio320),
+                          ),
+                          DropdownMenuItem(
+                            value: '192000',
+                            child: Text(l10n.audio192),
+                          ),
+                          DropdownMenuItem(
+                            value: '128000',
+                            child: Text(l10n.audio128),
+                          ),
+                          DropdownMenuItem(
+                            value: '96000',
+                            child: Text(l10n.audio96),
+                          ),
+                        ],
+                        onChanged: (val) => _saveStringSetting(
+                          'setting_audio_bitrate',
+                          val!,
+                          (v) => _audioBitrateValue = v,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
 
                 const Divider(height: 32, color: Colors.white24),
 
-                _buildSectionTitle(l10n.privacy),
-                SwitchListTile(
-                  title: Text(l10n.supportCreatorAdsTitle),
-                  subtitle: Text(l10n.supportCreatorAdsSubtitle),
-                  activeThumbColor: Colors.deepPurpleAccent,
-                  value: _showAds,
-                  onChanged: _updateAdsSetting,
-                ),
-
-                ListTile(
-                  title: Text(l10n.managePrivacy),
-                  subtitle: Text(l10n.managePrivacySubtitle),
-                  trailing: const Icon(
-                    Icons.privacy_tip_outlined,
-                    color: Colors.deepPurpleAccent,
+                if (adsSupportedOnThisPlatform) ...[
+                  _buildSectionTitle(l10n.privacy),
+                  SwitchListTile(
+                    title: Text(l10n.supportCreatorAdsTitle),
+                    subtitle: Text(l10n.supportCreatorAdsSubtitle),
+                    activeThumbColor: Colors.deepPurpleAccent,
+                    value: _showAds,
+                    onChanged: _updateAdsSetting,
                   ),
-                  enabled: _showAds,
-                  onTap: _showPrivacyManager,
-                ),
+
+                  ListTile(
+                    title: Text(l10n.managePrivacy),
+                    subtitle: Text(l10n.managePrivacySubtitle),
+                    trailing: const Icon(
+                      Icons.privacy_tip_outlined,
+                      color: Colors.deepPurpleAccent,
+                    ),
+                    enabled: _showAds,
+                    onTap: _showPrivacyManager,
+                  ),
+                ],
 
                 _buildSectionTitle(l10n.administration),
                 ListTile(
@@ -546,16 +652,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     ConsentInformation.instance.reset();
 
-    final String? testDeviceId = dotenv.env['ADMOB_TEST_DEVICE_ID'];
-
-    ConsentRequestParameters params = ConsentRequestParameters(
-      consentDebugSettings: ConsentDebugSettings(
-        debugGeography: DebugGeography.debugGeographyEea,
-        testIdentifiers: testDeviceId != null && testDeviceId.isNotEmpty
-            ? [testDeviceId]
-            : [],
-      ),
-    );
+    final params = buildConsentRequestParameters();
 
     ConsentInformation.instance.requestConsentInfoUpdate(
       params,
@@ -571,21 +668,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
               });
             },
             (FormError formError) {
-              debugPrint(
-                "BĹ‚Ä…d Ĺ‚adowania formularza UMP: ${formError.message}",
-              );
+              debugPrint("Błąd ładowania formularza UMP: ${formError.message}");
             },
           );
         }
       },
       (FormError error) {
-        debugPrint("BĹ‚Ä…d sprawdzania statusu UMP: ${error.message}");
+        debugPrint("Błąd sprawdzania statusu UMP: ${error.message}");
       },
     );
   }
 
+  /// Ends the session on the server, stops downloads that carry the token,
+  /// and forgets the credentials. Offline playback changes stay queued with
+  /// their user ID and are sent only after the same user logs in again.
   Future<void> _logout() async {
+    // Server-side cleanup is best effort: whatever fails here, the local
+    // login is still removed below.
+    try {
+      final creds = await _storage.getCredentials();
+      if (creds != null && creds['token'] != null) {
+        await PlaybackSyncService.instance.syncPending();
+        await JellyfinApi().logout(creds['baseUrl']!, creds['token']!);
+      }
+    } catch (error) {
+      debugPrint('Wylogowanie na serwerze nie powiodło się (${error.runtimeType}).');
+    }
+    try {
+      await DownloadService().cancelAllAndForgetTokens();
+    } catch (error) {
+      debugPrint('Nie udało się zatrzymać pobrań (${error.runtimeType}).');
+    }
     await _storage.clearCredentials();
+    PlaybackSyncService.instance.onCredentialsChanged();
 
     if (!mounted) return;
     RestartWidget.restartAppFromRootNavigator();

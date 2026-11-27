@@ -8,6 +8,10 @@ import 'player/player_screen.dart';
 import 'details_screen.dart';
 import '../models/jellyfin_item.dart';
 import '../widgets/ad_banner_widget.dart';
+import '../widgets/favorite_button.dart';
+import '../widgets/quality_picker.dart';
+import 'item_navigation.dart';
+import '../widgets/series_header.dart';
 
 class SeriesDetailsScreen extends StatefulWidget {
   final JellyfinItem series;
@@ -32,11 +36,51 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
   bool _isLoading = true;
   Map<String, String?> _isDownloadedMap = {};
   Map<String, dynamic>? _firstEpisodeMediaInfo;
+  Map<String, dynamic>? _seriesDetails;
 
   @override
   void initState() {
     super.initState();
     _loadEpisodes();
+    _loadSeriesDetails();
+  }
+
+  Future<void> _loadSeriesDetails() async {
+    final data = await JellyfinApi().fetchItemDetails(
+      baseUrl: widget.baseUrl,
+      token: widget.token,
+      userId: widget.userId,
+      itemId: widget.series.id,
+    );
+    if (mounted && data != null) setState(() => _seriesDetails = data);
+  }
+
+  /// The episode to offer first: one in progress, else the first unwatched
+  /// one after the last watched.
+  Episode? get _nextEpisode {
+    if (_episodes.isEmpty) return null;
+    bool watched(Episode e) {
+      if (e.userData?.played ?? false) return true;
+      final ticks = e.userData?.playbackPositionTicks;
+      final runtime = e.runTimeTicks;
+      return ticks != null &&
+          runtime != null &&
+          runtime > 0 &&
+          ticks / runtime >= 0.95;
+    }
+
+    for (final e in _episodes) {
+      final ticks = e.userData?.playbackPositionTicks ?? 0;
+      if (ticks > 0 && !watched(e)) return e;
+    }
+    final lastWatched = _episodes.lastIndexWhere(watched);
+    for (var i = lastWatched + 1; i < _episodes.length; i++) {
+      if (!watched(_episodes[i])) return _episodes[i];
+    }
+    return _episodes.firstWhere(
+      (e) => !watched(e),
+      orElse: () => _episodes.first,
+    );
   }
 
   Map<int, List<Episode>> _groupEpisodesBySeason(List<Episode> episodes) {
@@ -77,6 +121,11 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
         widget.userId,
         widget.series.id,
       );
+      if (!mounted) return;
+      setState(() {
+        _episodes = eps;
+        _isLoading = false;
+      });
       _scanDiskForExistingFiles(eps);
 
       if (eps.isNotEmpty) {
@@ -89,14 +138,9 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
           setState(() => _firstEpisodeMediaInfo = mediaInfo);
         }
       }
-
-      setState(() {
-        _episodes = eps;
-        _isLoading = false;
-      });
     } catch (e) {
-      debugPrint("Błąd ładowania odcinków: $e");
-      setState(() => _isLoading = false);
+      debugPrint("Błąd ładowania odcinków (${e.runtimeType}).");
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -117,7 +161,7 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
     }
   }
 
-  void _startDownloadOffline(
+  Future<void> _startDownloadOffline(
     Episode episode,
     int? maxWidth,
     int? bitrate,
@@ -136,32 +180,34 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
     );
   }
 
-  void _downloadSeasonWithQuality(
+  Future<void> _downloadSeasonWithQuality(
     List<Episode> seasonEpisodes,
     int? maxWidth,
     int? bitrate,
     String qualityLabel,
     AppLocalizations l10n,
-  ) {
-    int added = 0;
-    for (var ep in seasonEpisodes) {
-      final isDownloaded = _isDownloadedMap[ep.id] != null;
-      if (!isDownloaded) {
-        _startDownloadOffline(ep, maxWidth, bitrate, qualityLabel);
-        added++;
-      }
-    }
-
+  ) async {
+    final missing = seasonEpisodes
+        .where((ep) => _isDownloadedMap[ep.id] == null)
+        .toList();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          added > 0
-              ? "Kolejkowanie $added odcinków (sezon ${seasonEpisodes.first.parentIndexNumber})"
-              : "Wszystko już pobrane!",
+          missing.isNotEmpty
+              ? l10n.queueingEpisodes(missing.length)
+              : l10n.allDownloaded,
         ),
-        backgroundColor: Colors.deepPurple,
       ),
     );
+    // One after another: queuing a whole season at once used to start every
+    // preparation in parallel and could overload the app.
+    for (final ep in missing) {
+      try {
+        await _startDownloadOffline(ep, maxWidth, bitrate, qualityLabel);
+      } catch (error) {
+        debugPrint('Nie udało się dodać odcinka (${error.runtimeType}).');
+      }
+    }
   }
 
   void _showDownloadSeasonOptions(
@@ -169,84 +215,21 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
     List<Episode> seasonEpisodes,
     AppLocalizations l10n,
   ) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.grey[900],
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text(
-              l10n.selectQualitySeason(
-                seasonEpisodes.first.parentIndexNumber ?? 0,
-              ),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+    showQualityPicker(
+      context,
+      title: seasonEpisodes.length == 1
+          ? l10n.selectQuality
+          : l10n.selectQualitySeason(
+              seasonEpisodes.first.parentIndexNumber ?? 0,
             ),
-          ),
-          ..._buildQualityOptions(
-            context,
-            (w, b, l) =>
-                _downloadSeasonWithQuality(seasonEpisodes, w, b, l, l10n),
-          ),
-        ],
-      ),
+      mediaInfo: _firstEpisodeMediaInfo,
+      onSelect: (w, b, l) =>
+          _downloadSeasonWithQuality(seasonEpisodes, w, b, l, l10n),
     );
   }
-
-  List<Widget> _buildQualityOptions(
-    BuildContext context,
-    void Function(int?, int?, String) onSelect,
-  ) {
-    final qualityOptions = DownloadService.getQualityOptions(
-      _firstEpisodeMediaInfo,
-    );
-
-    return qualityOptions
-        .map(
-          (quality) => _qTile(
-            context,
-            quality['label'] as String,
-            quality['icon'] as IconData,
-            quality['color'] as Color,
-            quality['width'] as int?,
-            quality['bitrate'] as int?,
-            quality['qualityLabel'] as String,
-            onSelect,
-          ),
-        )
-        .toList();
-  }
-
-  Widget _qTile(
-    BuildContext context,
-    String title,
-    IconData icon,
-    Color color,
-    int? w,
-    int? b,
-    String label,
-    Function(int?, int?, String) onSelect,
-  ) => ListTile(
-    leading: Icon(icon, color: color),
-    title: Text(title, style: const TextStyle(color: Colors.white)),
-    onTap: () {
-      Navigator.pop(context);
-      onSelect(w, b, label);
-    },
-  );
 
   void _playOnline(Episode episode) {
-    String streamUrl =
-        "${widget.baseUrl}/Videos/${episode.id}/stream.mp4"
-        "?Static=false&VideoCodec=h265&AudioCodec=aac";
+    final streamUrl = onlineStreamUrl(widget.baseUrl, episode.id);
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -272,236 +255,302 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
       _episodes,
     );
 
+    final nextEpisode = _nextEpisode;
+    final isFavorite =
+        (_seriesDetails?['UserData'] as Map?)?['IsFavorite'] == true ||
+        (widget.series.userData?.isFavorite ?? false);
+
     return Scaffold(
-      appBar: AppBar(title: Text(widget.series.name)),
+      appBar: AppBar(
+        title: Text(widget.series.name),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FavoriteButton(
+              key: ValueKey('fav-$isFavorite'),
+              baseUrl: widget.baseUrl,
+              token: widget.token,
+              userId: widget.userId,
+              itemId: widget.series.id,
+              initialIsFavorite: isFavorite,
+            ),
+          ),
+        ],
+      ),
       body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(color: Colors.deepPurple),
             )
-          : ListView(
-              children: groupedEpisodes.entries.map((entry) {
-                final seasonEpisodes = entry.value;
-                final bool expandedByDefault =
-                    groupedEpisodes.keys.first == entry.key;
-                return ExpansionTile(
-                  key: PageStorageKey<int>(entry.key),
-                  initiallyExpanded: expandedByDefault,
-                  collapsedBackgroundColor: Colors.white12,
-                  backgroundColor: Colors.white10,
-                  leading: const Icon(
-                    Icons.video_collection,
-                    color: Colors.white,
+          : RefreshIndicator(
+              onRefresh: () async {
+                _loadEpisodes();
+                await _loadSeriesDetails();
+              },
+              child: ListView(
+                children: [
+                  SeriesHeader(
+                    seriesId: widget.series.id,
+                    details: _seriesDetails,
+                    baseUrl: widget.baseUrl,
+                    token: widget.token,
+                    nextEpisode: nextEpisode,
+                    onPlayNext: nextEpisode == null
+                        ? null
+                        : () => _navigateToEpisodeDetails(nextEpisode),
+                    onUnwantedChanged: _loadSeriesDetails,
                   ),
-                  title: Row(
-                    children: [
-                      Text(
-                        "SEZON ${entry.key}",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      // Badge postępu sezonu
-                      _SeasonBadge(episodes: seasonEpisodes),
-                    ],
-                  ),
-                  controlAffinity: ListTileControlAffinity.platform,
-
-                  children: [
+                  if (_episodes.isEmpty)
                     Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
-                      ),
-                      child: Column(
-                        children: [
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: () => _showDownloadSeasonOptions(
-                                context,
-                                seasonEpisodes,
-                                l10n,
-                              ),
-                              icon: const Icon(
-                                Icons.download_for_offline,
-                                color: Colors.white,
-                                size: 18,
-                              ),
-                              label: Text(
-                                l10n.downloadSeason,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: Colors.white24),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                      padding: const EdgeInsets.all(32),
+                      child: Text(
+                        l10n.noEpisodes,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white54),
                       ),
                     ),
-                    ...seasonEpisodes.map((episode) {
-                      return ValueListenableBuilder<
-                        Map<String, DownloadStatus>
-                      >(
-                        valueListenable: downloadService.activeDownloads,
-                        builder: (context, activeDownloadsMap, _) {
-                          final String? localPath =
-                              _isDownloadedMap[episode.id];
-                          final activeDl = activeDownloadsMap[episode.id];
+                  ...groupedEpisodes.entries.map((entry) {
+                    final seasonEpisodes = entry.value;
+                    final bool expandedByDefault =
+                        groupedEpisodes.keys.first == entry.key;
+                    return ExpansionTile(
+                      key: PageStorageKey<int>(entry.key),
+                      initiallyExpanded: expandedByDefault,
+                      collapsedBackgroundColor: Colors.white12,
+                      backgroundColor: Colors.white10,
+                      leading: const Icon(
+                        Icons.video_collection,
+                        color: Colors.white,
+                      ),
+                      title: Row(
+                        children: [
+                          Text(
+                            entry.key == 0
+                                ? l10n.specials
+                                : l10n.seasonNumber(entry.key),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          // Badge postępu sezonu
+                          _SeasonBadge(episodes: seasonEpisodes),
+                        ],
+                      ),
+                      controlAffinity: ListTileControlAffinity.platform,
 
-                          return Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
+                          child: Column(
                             children: [
-                              GestureDetector(
-                                onTap: () => _navigateToEpisodeDetails(episode),
-                                child: EpisodeCard(
-                                  episode: episode,
-                                  baseUrl: widget.baseUrl,
-                                  token: widget.token,
-                                  userId: widget.userId,
-                                  onDownload: () =>
-                                      _navigateToEpisodeDetails(episode),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: () => _showDownloadSeasonOptions(
+                                    context,
+                                    seasonEpisodes,
+                                    l10n,
+                                  ),
+                                  icon: const Icon(
+                                    Icons.download_for_offline,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                  label: Text(
+                                    l10n.downloadSeason,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(
+                                      color: Colors.white24,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
                                 ),
                               ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: TextButton.icon(
-                                        onPressed: () => _playOnline(episode),
-                                        icon: const Icon(
-                                          Icons.play_arrow,
-                                          color: Colors.white,
-                                        ),
-                                        label: Text(
-                                          l10n.watchOnline,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
+                            ],
+                          ),
+                        ),
+                        ...seasonEpisodes.map((episode) {
+                          return ValueListenableBuilder<
+                            Map<String, DownloadStatus>
+                          >(
+                            valueListenable: downloadService.activeDownloads,
+                            builder: (context, activeDownloadsMap, _) {
+                              final String? localPath =
+                                  _isDownloadedMap[episode.id];
+                              final activeDl = activeDownloadsMap[episode.id];
+
+                              return Column(
+                                children: [
+                                  GestureDetector(
+                                    onTap: () =>
+                                        _navigateToEpisodeDetails(episode),
+                                    child: EpisodeCard(
+                                      episode: episode,
+                                      baseUrl: widget.baseUrl,
+                                      token: widget.token,
+                                      userId: widget.userId,
+                                      onDownload: () =>
+                                          _showDownloadSeasonOptions(context, [
+                                            episode,
+                                          ], l10n),
                                     ),
-                                    Expanded(
-                                      child: localPath != null
-                                          ? TextButton.icon(
-                                              onPressed: () => Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (context) =>
-                                                      PlayerScreen(
-                                                        url: localPath,
-                                                        title: episode.name,
-                                                        itemId: episode.id,
-                                                        baseUrl: widget.baseUrl,
-                                                        token: widget.token,
-                                                        userId: widget.userId,
-                                                        isOffline: true,
-                                                      ),
-                                                ),
-                                              ),
-                                              icon: const Icon(
-                                                Icons.download_done,
-                                                color: Colors.greenAccent,
-                                              ),
-                                              label: const Text(
-                                                "OFFLINE",
-                                                style: TextStyle(
-                                                  color: Colors.greenAccent,
-                                                ),
-                                              ),
-                                            )
-                                          : activeDl != null
-                                          ? Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: [
-                                                Flexible(
-                                                  child: Text(
-                                                    activeDl.progressText,
-                                                    style: const TextStyle(
-                                                      color: Colors.greenAccent,
-                                                      fontSize: 12,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ),
-                                                if (!activeDl.isDownloaded)
-                                                  IconButton(
-                                                    icon: const Icon(
-                                                      Icons.close,
-                                                      size: 18,
-                                                      color: Colors.white54,
-                                                    ),
-                                                    tooltip:
-                                                        'Anuluj pobieranie',
-                                                    onPressed: () =>
-                                                        downloadService
-                                                            .cancelDownload(
-                                                              episode.id,
-                                                            ),
-                                                  ),
-                                              ],
-                                            )
-                                          : TextButton.icon(
-                                              onPressed: () {
-                                                _showDownloadSeasonOptions(
-                                                  context,
-                                                  [episode],
-                                                  l10n,
-                                                );
-                                              },
-                                              icon: const Icon(
-                                                Icons.download,
-                                                color: Colors.white54,
-                                              ),
-                                              label: Text(
-                                                "POBIERZ", // Do dodania w .arb
-                                                style: const TextStyle(
-                                                  color: Colors.white54,
-                                                ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: TextButton.icon(
+                                            onPressed: () =>
+                                                _playOnline(episode),
+                                            icon: const Icon(
+                                              Icons.play_arrow,
+                                              color: Colors.white,
+                                            ),
+                                            label: Text(
+                                              l10n.watchOnline,
+                                              style: const TextStyle(
+                                                color: Colors.white,
                                               ),
                                             ),
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: localPath != null
+                                              ? TextButton.icon(
+                                                  onPressed: () =>
+                                                      Navigator.push(
+                                                        context,
+                                                        MaterialPageRoute(
+                                                          builder: (context) =>
+                                                              PlayerScreen(
+                                                                url: localPath,
+                                                                title: episode
+                                                                    .name,
+                                                                itemId:
+                                                                    episode.id,
+                                                                baseUrl: widget
+                                                                    .baseUrl,
+                                                                token: widget
+                                                                    .token,
+                                                                userId: widget
+                                                                    .userId,
+                                                                isOffline: true,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                  icon: const Icon(
+                                                    Icons.download_done,
+                                                    color: Colors.greenAccent,
+                                                  ),
+                                                  label: Text(
+                                                    l10n.watchOffline,
+                                                    style: const TextStyle(
+                                                      color: Colors.greenAccent,
+                                                    ),
+                                                  ),
+                                                )
+                                              : activeDl != null
+                                              ? Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Flexible(
+                                                      child: Text(
+                                                        activeDl.progressText,
+                                                        style: const TextStyle(
+                                                          color: Colors
+                                                              .greenAccent,
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    if (!activeDl.isDownloaded)
+                                                      IconButton(
+                                                        icon: const Icon(
+                                                          Icons.close,
+                                                          size: 18,
+                                                          color: Colors.white54,
+                                                        ),
+                                                        tooltip:
+                                                            l10n.cancelDownload,
+                                                        onPressed: () =>
+                                                            downloadService
+                                                                .cancelDownload(
+                                                                  episode.id,
+                                                                ),
+                                                      ),
+                                                  ],
+                                                )
+                                              : TextButton.icon(
+                                                  onPressed: () {
+                                                    _showDownloadSeasonOptions(
+                                                      context,
+                                                      [episode],
+                                                      l10n,
+                                                    );
+                                                  },
+                                                  icon: const Icon(
+                                                    Icons.download,
+                                                    color: Colors.white54,
+                                                  ),
+                                                  label: Text(
+                                                    l10n.download,
+                                                    style: const TextStyle(
+                                                      color: Colors.white54,
+                                                    ),
+                                                  ),
+                                                ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                              ),
-                              if (activeDl != null)
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                    vertical: 5,
                                   ),
-                                  child: LinearProgressIndicator(
-                                    value: activeDl.progressValue < 0
-                                        ? null
-                                        : activeDl.progressValue,
-                                    color: Colors.greenAccent,
-                                    backgroundColor: Colors.white10,
+                                  if (activeDl != null)
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 20,
+                                        vertical: 5,
+                                      ),
+                                      child: LinearProgressIndicator(
+                                        value: activeDl.progressValue < 0
+                                            ? null
+                                            : activeDl.progressValue,
+                                        color: Colors.greenAccent,
+                                        backgroundColor: Colors.white10,
+                                      ),
+                                    ),
+                                  const Divider(
+                                    color: Colors.white10,
+                                    height: 1,
                                   ),
-                                ),
-                              const Divider(color: Colors.white10, height: 1),
-                            ],
+                                ],
+                              );
+                            },
                           );
-                        },
-                      );
-                    }),
-                  ],
-                );
-              }).toList(),
+                        }),
+                      ],
+                    );
+                  }),
+                ],
+              ),
             ),
       bottomNavigationBar: const AdBannerWidget(),
     );

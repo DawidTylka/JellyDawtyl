@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_application_1/utils/jellyfin_auth.dart';
+import 'package:jellydawtyl/utils/jellyfin_auth.dart';
 
 void main() {
   test('token requests use the MediaBrowser Authorization header', () {

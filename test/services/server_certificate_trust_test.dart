@@ -1,5 +1,5 @@
-import 'package:flutter_application_1/services/server_certificate_trust.dart';
-import 'package:flutter_application_1/services/storage_service.dart';
+import 'package:jellydawtyl/services/server_certificate_trust.dart';
+import 'package:jellydawtyl/services/storage_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

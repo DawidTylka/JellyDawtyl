@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_application_1/services/download_task_queue.dart';
+import 'package:jellydawtyl/services/download_task_queue.dart';
 
 void main() {
   test('continues to the next task after a task throws', () async {

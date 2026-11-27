@@ -16,8 +16,10 @@ Future<void> flushPendingPlaybackChanges({
   required Map<String, Map<String, dynamic>> pending,
   required PlaybackChangeSynchronizer synchronize,
   required Future<void> Function() save,
+  bool Function(Map<String, dynamic> change)? include,
 }) async {
   for (final entry in pending.entries.toList()) {
+    if (include != null && !include(entry.value)) continue;
     var synchronized = false;
     try {
       synchronized = await synchronize(entry.value);
@@ -28,4 +30,11 @@ Future<void> flushPendingPlaybackChanges({
     pending.remove(entry.key);
     await save();
   }
+}
+
+/// A queued change is sent only to the account that recorded it. Changes
+/// without an owner (from older versions) are sent to the current account.
+bool belongsToUser(Map<String, dynamic> change, String? userId) {
+  final owner = change['userId'];
+  return owner == null || owner == userId;
 }

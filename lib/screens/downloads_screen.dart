@@ -6,7 +6,9 @@ import '../l10n/app_localizations.dart';
 import 'player/player_screen.dart';
 import '../services/download_service.dart';
 import '../services/playback_sync_service.dart';
+import '../widgets/active_downloads_panel.dart';
 import '../widgets/ad_banner_widget.dart';
+import '../widgets/message_view.dart';
 import '../widgets/responsive_grid_layout.dart';
 import '../widgets/media_grid_card.dart';
 import '../widgets/episode_card.dart';
@@ -55,7 +57,36 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     }).toList();
   }
 
+  /// Sidecars of the listed files, read asynchronously in [_loadData] so
+  /// that `build` does not read JSON files from disk on every frame.
+  final Map<String, Map<String, dynamic>?> _metadataCache = {};
+
+  Future<void> _refreshMetadataCache() async {
+    final files = _items.whereType<File>().toList();
+    final entries = await Future.wait(
+      files.map((file) async {
+        final jsonFile = File('${file.path}.json');
+        try {
+          if (!await jsonFile.exists()) return MapEntry(file.path, null);
+          final decoded = jsonDecode(await jsonFile.readAsString());
+          return MapEntry(
+            file.path,
+            decoded is Map<String, dynamic> ? decoded : null,
+          );
+        } catch (_) {
+          return MapEntry<String, Map<String, dynamic>?>(file.path, null);
+        }
+      }),
+    );
+    _metadataCache
+      ..clear()
+      ..addEntries(entries);
+  }
+
   Map<String, dynamic>? _readMetadata(File videoFile) {
+    if (_metadataCache.containsKey(videoFile.path)) {
+      return _metadataCache[videoFile.path];
+    }
     final jsonFile = File('${videoFile.path}.json');
     if (!jsonFile.existsSync()) return null;
     try {
@@ -88,7 +119,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   }
 
   void _onDownloadedMetadataChanged() {
-    if (mounted) setState(() {});
+    unawaited(
+      _refreshMetadataCache().then((_) {
+        if (mounted) setState(() {});
+      }),
+    );
   }
 
   Future<void> _loadData() async {
@@ -123,11 +158,13 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       } else {
         _items = [];
       }
+      await _refreshMetadataCache();
+      if (!mounted) return;
 
       setState(() => _isLoading = false);
     } catch (e) {
       debugPrint("Błąd ładowania danych: $e");
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -148,14 +185,12 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Theme.of(context).colorScheme.surface,
-        title: Text("Usuń ${_selectedIndices.length} elementów"),
-        content: const Text(
-          "Czy na pewno chcesz trwale usunąć zaznaczone treści?",
-        ),
+        title: Text(l10n.deleteItems(_selectedIndices.length)),
+        content: Text(l10n.deleteConfirm),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Anuluj"),
+            child: Text(l10n.cancel),
           ),
           TextButton(
             onPressed: () {
@@ -185,9 +220,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                 }
               }();
             },
-            child: const Text(
-              "Usuń",
-              style: TextStyle(color: Colors.redAccent),
+            child: Text(
+              l10n.delete,
+              style: const TextStyle(color: Colors.redAccent),
             ),
           ),
         ],
@@ -225,13 +260,13 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               : Theme.of(context).appBarTheme.backgroundColor,
           elevation: 0,
           title: _isSelectionMode
-              ? Text("Zaznaczono: ${_selectedIndices.length}")
+              ? Text(l10n.selectedCount(_selectedIndices.length))
               : _isSearching
               ? TextField(
                   controller: _searchController,
                   autofocus: true,
-                  decoration: const InputDecoration(
-                    hintText: 'Szukaj pobranych...',
+                  decoration: InputDecoration(
+                    hintText: l10n.searchDownloadsHint,
                     border: InputBorder.none,
                   ),
                   onChanged: (value) => setState(() => _searchQuery = value),
@@ -255,12 +290,24 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                       )
                     : null),
           actions: [
-            if (_isSelectionMode)
+            if (_isSelectionMode) ...[
+              IconButton(
+                icon: const Icon(Icons.select_all),
+                tooltip: l10n.selectAll,
+                onPressed: () => setState(() {
+                  _selectedIndices.addAll(
+                    List.generate(_visibleItems.length, (i) => i),
+                  );
+                }),
+              ),
               IconButton(
                 icon: const Icon(Icons.delete_sweep),
-                onPressed: () => _deleteSelected(l10n),
-              )
-            else ...[
+                tooltip: l10n.delete,
+                onPressed: _selectedIndices.isEmpty
+                    ? null
+                    : () => _deleteSelected(l10n),
+              ),
+            ] else ...[
               if (_isSearching)
                 IconButton(
                   icon: const Icon(Icons.close),
@@ -273,94 +320,70 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               else
                 IconButton(
                   icon: const Icon(Icons.search),
-                  tooltip: 'Szukaj pobranych',
+                  tooltip: l10n.searchDownloadsHint,
                   onPressed: () => setState(() => _isSearching = true),
                 ),
-              IconButton(icon: const Icon(Icons.refresh), onPressed: _loadData),
+              if (_visibleItems.isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.checklist),
+                  tooltip: l10n.selectItems,
+                  onPressed: () => setState(() => _isSelectionMode = true),
+                ),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                tooltip: l10n.refresh,
+                onPressed: _loadData,
+              ),
             ],
           ],
         ),
-        body: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: Colors.deepPurple),
-              )
-            : _visibleItems.isEmpty
-            ? _buildEmptyState(l10n)
-            : (_currentFolder == null ? _buildFolderGrid() : _buildFileList()),
+        body: Column(
+          children: [
+            if (_currentFolder == null) const ActiveDownloadsPanel(),
+            Expanded(
+              child: _isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: Colors.deepPurple,
+                      ),
+                    )
+                  : _visibleItems.isEmpty
+                  ? _buildEmptyState(l10n)
+                  : (_currentFolder == null
+                        ? _buildFolderGrid()
+                        : _buildFileList()),
+            ),
+          ],
+        ),
 
         bottomNavigationBar: const AdBannerWidget(),
       ),
     );
   }
 
-  Widget _buildThumbnail(File? thumbnailFile, File? coverFile) {
-    if (thumbnailFile?.existsSync() ?? false) {
-      try {
-        final size = thumbnailFile!.lengthSync();
-        if (size > 1000) {
-          return Container(
-            width: 100,
-            height: 60,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              image: DecorationImage(
-                image: FileImage(thumbnailFile),
-                fit: BoxFit.cover,
-                onError: (exception, stackTrace) {
-                  try {
-                    thumbnailFile.deleteSync();
-                  } catch (e) {
-                    debugPrint("Nie udało się usunąć: $e");
-                  }
-                },
-              ),
-            ),
-          );
-        } else {
-          try {
-            thumbnailFile.deleteSync();
-          } catch (e) {
-            debugPrint("Nie udało się usunąć małego thumbnail: $e");
-          }
-        }
-      } catch (e) {
-        try {
-          if (thumbnailFile!.existsSync()) thumbnailFile.deleteSync();
-        } catch (e) {
-          debugPrint("Nie udało się usunąć: $e");
-        }
-      }
+  // Files that are too small are failed image downloads. They are skipped
+  // here instead of being deleted while the widget tree is being built.
+  static bool _isUsableImage(File? file) {
+    try {
+      return file != null && file.existsSync() && file.lengthSync() > 1000;
+    } catch (_) {
+      return false;
     }
+  }
 
-    if (coverFile?.existsSync() ?? false) {
-      try {
-        final size = coverFile!.lengthSync();
-        if (size > 1000) {
-          return Container(
-            width: 100,
-            height: 60,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              image: DecorationImage(
-                image: FileImage(coverFile),
-                fit: BoxFit.cover,
-              ),
-            ),
-          );
-        } else {
-          try {
-            coverFile.deleteSync();
-          } catch (e) {
-            debugPrint("Nie udało się usunąć małego cover: $e");
-          }
-        }
-      } catch (e) {
-        try {
-          if (coverFile!.existsSync()) coverFile.deleteSync();
-        } catch (e) {
-          debugPrint("Nie udało się usunąć: $e");
-        }
-      }
+  Widget _buildThumbnail(File? thumbnailFile, File? coverFile) {
+    final image = _isUsableImage(thumbnailFile)
+        ? thumbnailFile
+        : (_isUsableImage(coverFile) ? coverFile : null);
+    if (image != null) {
+      return Container(
+        width: 100,
+        height: 60,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          image: DecorationImage(image: FileImage(image), fit: BoxFit.cover),
+        ),
+      );
     }
 
     return const SizedBox(
@@ -370,25 +393,15 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     );
   }
 
-  Widget _buildEmptyState(AppLocalizations l10n) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.download_for_offline_outlined,
-            size: 80,
-            color: Colors.white10,
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            "Brak pobranych treści",
-            style: TextStyle(color: Colors.white24, fontSize: 18),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildEmptyState(AppLocalizations l10n) => MessageView(
+    icon: _searchQuery.isEmpty
+        ? Icons.download_for_offline_outlined
+        : Icons.search_off,
+    title: _searchQuery.isEmpty
+        ? l10n.noOfflineFiles
+        : l10n.noSearchResults(_searchQuery),
+    hint: _searchQuery.isEmpty ? l10n.noOfflineFilesHint : null,
+  );
 
   Widget _buildFolderGrid() {
     return ResponsiveGridLayout(

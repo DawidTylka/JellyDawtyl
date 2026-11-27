@@ -61,3 +61,16 @@ app.*.map.json
 /vendor/flutter_downloader/ios/.symlinks/
 /android/local.properties
 /android/key.properties
+
+# Lokalne artefakty testów odtwarzania i zrzuty awarii JVM
+temp.*
+debug.mp4
+*.raw
+hs_err_pid*.log
+replay_pid*.log
+
+# Podpisywanie Androida (CI odtwarza je z sekretów)
+android/app/key.properties
+android/app/*.jks
+*.keystore
+temp.m3u8

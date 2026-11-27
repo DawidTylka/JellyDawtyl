@@ -25,22 +25,22 @@
   "downloading": "Pobieranie",
   "downloadWifiOnly": "Pobieraj tylko przez Wi-Fi",
   "downloadWifiOnlySub": "Zatrzymaj pobieranie przy użyciu danych komórkowych",
-  "useNativeDownloader": "Użyj menedżera Android",
-  "useNativeDownloaderSub": "Pobieraj w tle przez system",
+  "useNativeDownloader": "Powiadomienia pobierania",
+  "useNativeDownloaderSub": "Pokazuj postęp pobierania w tle w powiadomieniu systemowym",
   "privacy": "Prywatność",
   "managePrivacy": "Zarządzaj prywatnością (RODO)",
   "downloadFolder": "Folder zapisu wideo",
   "defaultFolder": "Domyślny folder",
   "searchHint": "Szukaj w tej sekcji...",
   "noDescription": "Brak opisu",
-  "watchOnline": "OGLĄDAJ ONLINE",
-  "watchOffline": "OGLĄDAJ OFFLINE",
-  "downloadToMemory": "POBIERZ DO PAMIĘCI",
-  "downloadAgain": "POBIERZ PONOWNIE",
+  "watchOnline": "Oglądaj online",
+  "watchOffline": "Oglądaj offline",
+  "downloadToMemory": "Pobierz do pamięci",
+  "downloadAgain": "Pobierz ponownie",
   "downloadSeason": "Pobierz sezon",
   "queueingEpisodes": "Kolejkowanie {count} odcinków",
   "allDownloaded": "Wszystko już pobrane!",
-  "deleteItems": "Usuń elementy",
+  "deleteItems": "{count, plural, =1{Usuń 1 element} few{Usuń {count} elementy} other{Usuń {count} elementów}}",
   "deleteConfirm": "Czy na pewno chcesz trwale usunąć zaznaczone treści?",
   "cancel": "Anuluj",
   "delete": "Usuń",
@@ -94,7 +94,6 @@
   "loginAction": "Zaloguj się",
   "loadingPanel": "Ładowanie panelu...",
   "fromBeginning": "Od początku (Online)",
-  "selectQualitySeason": "Sezon {number} - wybierz jakość",
   "@selectQualitySeason": {
     "placeholders": {
       "number": {
@@ -131,5 +130,339 @@
   "favoriteUpdateError": "Nie udało się zaktualizować ulubionych.",
   "markWatched": "Oznacz jako obejrzane",
   "markUnwatched": "Oznacz jako nieobejrzane",
-  "watchedUpdateError": "Nie udało się zmienić stanu obejrzenia."
+  "watchedUpdateError": "Nie udało się zmienić stanu obejrzenia.",
+  "libraryLoadError": "Nie udało się wczytać biblioteki. Sprawdź połączenie z serwerem.",
+  "certificateTrustSaveError": "Nie udało się zapisać ustawienia certyfikatu.",
+  "loginCertificateError": "Certyfikat HTTPS serwera nie jest zaufany. Jeśli to Twój serwer z własnym certyfikatem, zaznacz „Zaufaj certyfikatowi HTTPS serwera”.",
+  "loginServerError": "Serwer zwrócił nieoczekiwaną odpowiedź. Sprawdź adres serwera.",
+  "insecureHttpWarning": "Ten adres używa nieszyfrowanego HTTP poza siecią lokalną. Hasło i token będą przesyłane jawnym tekstem. Użyj https://, jeśli serwer na to pozwala.",
+  "trustCertificateTitle": "Zaufaj certyfikatowi HTTPS serwera",
+  "trustCertificateSub": "Użyj tylko dla serwera z własnym lub niezaufanym certyfikatem.",
+  "credentialStorageError": "Nie można odczytać zapisanych danych logowania. Twoje dane nie zostały usunięte. Spróbuj ponownie.",
+  "tryAgain": "Spróbuj ponownie",
+  "serverUnreachable": "Nie można połączyć się z serwerem. Sprawdź połączenie z internetem lub czy serwer działa. Pobrane pliki są dostępne offline.",
+  "failedDownloadTitle": "Nieudane pobieranie",
+  "failedDownloadCount": "{count, plural, =1{1 pobieranie nie powiodło się.} few{{count} pobrania nie powiodły się.} other{{count} pobrań nie powiodło się.}}",
+  "@failedDownloadCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "failedDownloadRetryQuestion": "Czy chcesz ponowić pobieranie?",
+  "no": "Nie",
+  "retry": "Ponów",
+  "playerTlsVerify": "Weryfikuj certyfikat TLS w odtwarzaczu",
+  "playerTlsVerifySub": "Odtwarzacz sprawdza certyfikat HTTPS serwera (pomija serwery oznaczone jako zaufane). Wyłącz, jeśli odtwarzanie przez HTTPS przestało działać.",
+  "introSkipperSection": "Pomijanie intro (Intro Skipper)",
+  "showSkipButton": "Przycisk pomijania",
+  "showSkipButtonSub": "Pokazuj „Pomiń intro” i podobne przyciski, gdy serwer zna segmenty odcinka (wtyczka Intro Skipper lub segmenty Jellyfin 10.10+)",
+  "autoSkipIntro": "Automatycznie pomijaj intro i podsumowanie",
+  "autoSkipIntroSub": "Przewija od razu, bez naciskania przycisku",
+  "autoSkipCredits": "Automatycznie pomijaj napisy końcowe",
+  "autoSkipCreditsSub": "Po napisach końcowych przechodzi do następnego odcinka, jeśli jest",
+  "@deleteItems": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "selectedCount": "Zaznaczono: {count}",
+  "@selectedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchDownloadsHint": "Szukaj pobranych...",
+  "skipIntro": "Pomiń intro",
+  "skipCredits": "Pomiń napisy końcowe",
+  "skipRecap": "Pomiń podsumowanie",
+  "skipPreview": "Pomiń zapowiedź",
+  "skipCommercial": "Pomiń reklamę",
+  "previousEpisode": "Poprzedni odcinek",
+  "nextEpisode": "Następny odcinek",
+  "serverPanelNoServer": "Najpierw zaloguj się do serwera.",
+  "unwantedSnoozedUntil": "do {date}",
+  "@unwantedSnoozedUntil": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "unwantedUntilNewEpisode": "do nowego odcinka",
+  "unwantedSnoozed": "Uśpiony",
+  "undo": "Cofnij",
+  "unwantedError": "Nie udało się zmienić listy. Spróbuj ponownie.",
+  "unwantedWatchLaterAdded": "Dodano „{name}” do „Na później”",
+  "@unwantedWatchLaterAdded": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "unwantedWatchLaterRemoved": "Usunięto „{name}” z „Na później”",
+  "@unwantedWatchLaterRemoved": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "unwantedMarked": "„{name}” → Nieulubione. Zniknie z list do oglądania.",
+  "@unwantedMarked": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "unwantedRestored": "Przywrócono „{name}”",
+  "@unwantedRestored": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "unwantedSnoozeTitle": "Uśpij „{name}”",
+  "@unwantedSnoozeTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "unwantedSnoozeHint": "Uśpiony serial znika z „Następne” i wraca sam po wybranym czasie.",
+  "unwantedWake": "Obudź teraz",
+  "unwantedSnoozeNewEpisode": "Do nowego odcinka",
+  "unwantedSnoozeDays": "Na {days} dni",
+  "@unwantedSnoozeDays": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "unwantedWoken": "Obudzono „{name}”",
+  "@unwantedWoken": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "unwantedSnoozedMessage": "Uśpiono „{name}”",
+  "@unwantedSnoozedMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "unwantedWatchLater": "Na później",
+  "unwantedSnooze": "Uśpij",
+  "unwantedNotInterested": "Nieulubione",
+  "unwantedAppliesToSeries": "Dotyczy całego serialu „{name}”",
+  "@unwantedAppliesToSeries": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "unwantedSnoozedList": "Uśpione",
+  "unwantedEmptyWatchLater": "Lista „Na później” jest pusta. Dodaj film lub serial przyciskiem „Na później” na jego stronie.",
+  "unwantedEmptySnoozed": "Nic nie śpi. Uśpij serial, żeby na jakiś czas zniknął z „Następne”.",
+  "unwantedEmptyUnwanted": "Brak nieulubionych. Oznacz serial lub film kciukiem w dół na jego stronie.",
+  "unwantedAddedOn": "Dodano {date}",
+  "@unwantedAddedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "unwantedRemoveWatchLater": "Usuń z „Na później”",
+  "unwantedRestore": "Przywróć",
+  "unwantedMyLists": "Moje listy",
+  "durationHoursMinutes": "{hours} godz. {minutes} min",
+  "@durationHoursMinutes": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      },
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "durationMinutes": "{minutes} min",
+  "@durationMinutes": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonEpisodeLabel": "Sezon {season} · Odcinek {episode}",
+  "@seasonEpisodeLabel": {
+    "placeholders": {
+      "season": {
+        "type": "int"
+      },
+      "episode": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonEpisodeShort": "S{season} O{episode}",
+  "@seasonEpisodeShort": {
+    "placeholders": {
+      "season": {
+        "type": "int"
+      },
+      "episode": {
+        "type": "int"
+      }
+    }
+  },
+  "endsAt": "Koniec o {time}",
+  "@endsAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "timeLeft": "Zostało {duration}",
+  "@timeLeft": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "subtitleCount": "{count, plural, =1{1 napisy} few{{count} napisy} many{{count} napisów} other{{count} napisów}}",
+  "@subtitleCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "watched": "Obejrzane",
+  "downloadedBadge": "Pobrane",
+  "showMore": "Pokaż więcej",
+  "showLess": "Pokaż mniej",
+  "directedBy": "Reżyseria",
+  "writtenBy": "Scenariusz",
+  "studio": "Studio",
+  "cast": "Obsada",
+  "chapters": "Rozdziały",
+  "chapterNumber": "Rozdział {number}",
+  "@chapterNumber": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "moreEpisodes": "Inne odcinki",
+  "technicalDetails": "Informacje techniczne",
+  "mediaContainer": "Kontener",
+  "mediaFileSize": "Rozmiar",
+  "mediaBitrate": "Bitrate",
+  "mediaVideo": "Wideo",
+  "mediaAudio": "Dźwięk",
+  "cancelDownload": "Anuluj pobieranie",
+  "favoritesAll": "Wszystkie",
+  "favoritesMovies": "Filmy",
+  "favoritesSeries": "Seriale",
+  "favoritesEpisodes": "Odcinki",
+  "sortBy": "Sortuj",
+  "sortName": "Nazwa",
+  "sortDateAdded": "Ostatnio dodane",
+  "sortPremiere": "Data premiery",
+  "sortRating": "Ocena",
+  "noFavorites": "Brak ulubionych",
+  "noFavoritesHint": "Dotknij serca na filmie, serialu lub odcinku, żeby go tu dodać.",
+  "noFavoritesInFilter": "Brak ulubionych w tej kategorii.",
+  "loadError": "Nie udało się wczytać danych z serwera.",
+  "search": "Szukaj",
+  "searchEverywhereHint": "Szukaj filmów, seriali i odcinków",
+  "noSearchResults": "Nic nie znaleziono dla „{query}”",
+  "@noSearchResults": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "searchStartTyping": "Wpisz co najmniej 2 znaki.",
+  "episodeOf": "{series} · S{season} O{episode}",
+  "@episodeOf": {
+    "placeholders": {
+      "series": {
+        "type": "String"
+      },
+      "season": {
+        "type": "int"
+      },
+      "episode": {
+        "type": "int"
+      }
+    }
+  },
+  "unwantedSnoozeOneDay": "Na 1 dzień",
+  "unwantedSnoozeWeek": "Na tydzień",
+  "unwantedSnoozeTwoWeeks": "Na 2 tygodnie",
+  "unwantedSnoozeMonth": "Na miesiąc",
+  "unwantedSnoozeThreeMonths": "Na 3 miesiące",
+  "noEpisodes": "Ten serial nie ma jeszcze odcinków.",
+  "specials": "Odcinki specjalne",
+  "seasonNumber": "Sezon {number}",
+  "download": "Pobierz",
+  "playNext": "Odtwórz",
+  "@seasonNumber": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "episodeNumber": "Odcinek {number}",
+  "@episodeNumber": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "searchInLibraryHint": "Szukaj w: {library}",
+  "@searchInLibraryHint": {
+    "placeholders": {
+      "library": {
+        "type": "String"
+      }
+    }
+  },
+  "downloadsInProgress": "Pobieranie ({count})",
+  "selectAll": "Zaznacz wszystko",
+  "selectItems": "Zaznacz do usunięcia",
+  "refresh": "Odśwież",
+  "noOfflineFilesHint": "Na stronie filmu lub odcinka wybierz „Pobierz do pamięci”, a na stronie serialu „Pobierz sezon”.",
+  "@downloadsInProgress": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "general": "Ogólne"
 }

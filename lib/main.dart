@@ -1,23 +1,27 @@
 import 'dart:async';
+import 'dart:io';
+
+import 'package:audio_service/audio_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'services/jellyfin_api.dart';
-import 'screens/library_selector_screen.dart';
-import 'services/storage_service.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
-import 'dart:io';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:audio_service/audio_service.dart';
-import 'services/my_audio_handler.dart';
+
+import 'l10n/app_localizations.dart';
 import 'screens/downloads_screen.dart';
+import 'screens/library_selector_screen.dart';
+import 'screens/login_screen.dart';
+import 'services/ads_consent.dart';
 import 'services/download_service.dart';
+import 'services/jellyfin_api.dart';
+import 'services/my_audio_handler.dart';
 import 'services/playback_sync_service.dart';
 import 'services/server_certificate_trust.dart';
-import 'utils/server_url.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import '../l10n/app_localizations.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'services/storage_service.dart';
+import 'models/library.dart';
 
 late MyAudioHandler audioHandler;
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -29,7 +33,6 @@ void main() async {
   MediaKit.ensureInitialized();
   await PlaybackSyncService.instance.initialize();
 
-  await dotenv.load(fileName: ".env");
   await DownloadService().initialize();
 
   audioHandler = await AudioService.init(
@@ -44,7 +47,7 @@ void main() async {
   );
 
   if (Platform.isAndroid || Platform.isIOS) {
-    await FlutterDownloader.initialize(debug: true, ignoreSsl: false);
+    await FlutterDownloader.initialize(debug: kDebugMode, ignoreSsl: false);
     await ServerCertificateTrust.syncAndroidDownloaderTrust();
     if (Platform.isAndroid) {
       await DownloadService().initializeBackgroundDownloads();
@@ -68,10 +71,15 @@ class _JellyfinAppState extends State<JellyfinApp> with WidgetsBindingObserver {
   final Set<String> _promptedFailureIds = {};
   bool _showingFailurePrompt = false;
 
+  /// Kept in a field: creating the future in `build` restarted the storage
+  /// read and the library request on every `setState`.
+  late Future<Map<String, dynamic>?> _appData;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _appData = checkAppData();
     _loadLocalePreference();
     _checkAdPreference();
     DownloadService().failedDownloads.addListener(_maybePromptFailedDownloads);
@@ -127,9 +135,9 @@ class _JellyfinAppState extends State<JellyfinApp> with WidgetsBindingObserver {
       context: dialogContext,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Nieudane pobieranie'),
+        title: Text(AppLocalizations.of(dialogContext)!.failedDownloadTitle),
         content: Text(
-          '${pending.length} ${pending.length == 1 ? 'pobieranie nie powiodło się' : 'pobrania nie powiodły się'}.${names.isEmpty ? '' : '\n$names'}\n\nCzy chcesz ponowić pobieranie?',
+          '${AppLocalizations.of(dialogContext)!.failedDownloadCount(pending.length)}${names.isEmpty ? '' : '\n$names'}\n\n${AppLocalizations.of(dialogContext)!.failedDownloadRetryQuestion}',
         ),
         actions: [
           TextButton(
@@ -139,7 +147,7 @@ class _JellyfinAppState extends State<JellyfinApp> with WidgetsBindingObserver {
               _showingFailurePrompt = false;
               _maybePromptFailedDownloads();
             },
-            child: const Text('Nie'),
+            child: Text(AppLocalizations.of(dialogContext)!.no),
           ),
           FilledButton(
             onPressed: () {
@@ -152,7 +160,7 @@ class _JellyfinAppState extends State<JellyfinApp> with WidgetsBindingObserver {
                 }),
               );
             },
-            child: const Text('Ponów'),
+            child: Text(AppLocalizations.of(dialogContext)!.retry),
           ),
         ],
       ),
@@ -173,27 +181,26 @@ class _JellyfinAppState extends State<JellyfinApp> with WidgetsBindingObserver {
     }
   }
 
+  void _reloadAppData() {
+    setState(() => _appData = checkAppData());
+  }
+
   Future<void> _checkAdPreference() async {
     final storage = StorageService();
 
-    if (Platform.isWindows) {
+    // AdMob exists only on Android and iOS; desktop builds never ask.
+    if (!adsSupportedOnThisPlatform) {
       await storage.saveString('setting_ads_choice', 'no');
     }
 
     final adsChoice = await storage.getString('setting_ads_choice');
+    if (!mounted) return;
 
-    if (adsChoice == null) {
-      setState(() {
-        _isLoadingPref = false;
-        _showAdPrompt = true;
-      });
-    } else {
-      setState(() {
-        _isLoadingPref = false;
-      });
-      if (adsChoice == 'yes') {
-        _gatherConsentAndInitAds();
-      }
+    _isLoadingPref = false;
+    _showAdPrompt = adsChoice == null;
+    _reloadAppData();
+    if (adsChoice == 'yes') {
+      _gatherConsentAndInitAds();
     }
   }
 
@@ -202,28 +209,18 @@ class _JellyfinAppState extends State<JellyfinApp> with WidgetsBindingObserver {
       'setting_ads_choice',
       allowAds ? 'yes' : 'no',
     );
-    setState(() {
-      _showAdPrompt = false;
-    });
+    _showAdPrompt = false;
+    _reloadAppData();
 
     if (allowAds) {
       _gatherConsentAndInitAds();
     } else {
-      debugPrint("⛔ Użytkownik odmówił reklam. AdMob NIE zostanie załadowany.");
+      debugPrint('Użytkownik odmówił reklam. AdMob nie zostanie załadowany.');
     }
   }
 
   Future<void> _gatherConsentAndInitAds() async {
-    final String? testDeviceId = dotenv.env['ADMOB_TEST_DEVICE_ID'];
-
-    ConsentRequestParameters params = ConsentRequestParameters(
-      consentDebugSettings: ConsentDebugSettings(
-        debugGeography: DebugGeography.debugGeographyEea,
-        testIdentifiers: testDeviceId != null && testDeviceId.isNotEmpty
-            ? [testDeviceId]
-            : [],
-      ),
-    );
+    final params = buildConsentRequestParameters();
 
     ConsentInformation.instance.requestConsentInfoUpdate(
       params,
@@ -262,7 +259,7 @@ class _JellyfinAppState extends State<JellyfinApp> with WidgetsBindingObserver {
 
   void _initializeAds() async {
     await MobileAds.instance.initialize();
-    debugPrint("✅ AdMob załadowany pomyślnie!");
+    debugPrint('AdMob załadowany.');
   }
 
   Future<Map<String, dynamic>?> checkAppData() async {
@@ -286,27 +283,28 @@ class _JellyfinAppState extends State<JellyfinApp> with WidgetsBindingObserver {
       return {'needsAdsPrompt': true};
     }
 
-    if (creds == null || creds['token'] == null) return null;
+    if (creds == null || creds['token'] == null) {
+      return creds == null ? null : {'creds': creds};
+    }
 
     try {
-      final api = JellyfinApi();
-      final libraries = await api
-          .fetchUserLibraries(
-            creds['baseUrl']!,
-            creds['token']!,
-            creds['userId']!,
-          )
-          .timeout(const Duration(seconds: 10));
-
+      final libraries = await JellyfinApi().fetchUserLibrariesOrThrow(
+        creds['baseUrl']!,
+        creds['token']!,
+        creds['userId']!,
+      );
       return {'creds': creds, 'libraries': libraries};
-    } catch (e) {
-      debugPrint("Błąd weryfikacji tokena: $e");
-
-      if (e.toString().contains('401')) {
-        await storage.clearCredentials();
-        return null;
-      }
-      return null;
+    } on JellyfinUnauthorizedException {
+      // The token expired or was revoked: forget it, keep the address.
+      debugPrint('Zapisany token jest nieważny.');
+      await storage.clearCredentials();
+      return {
+        'creds': {'baseUrl': creds['baseUrl']!},
+      };
+    } catch (error) {
+      // No network or the server is down: the session may still be valid.
+      debugPrint('Serwer jest nieosiągalny (${error.runtimeType}).');
+      return {'creds': creds, 'serverUnreachable': true};
     }
   }
 
@@ -320,7 +318,7 @@ class _JellyfinAppState extends State<JellyfinApp> with WidgetsBindingObserver {
     return MaterialApp(
       navigatorKey: rootNavigatorKey,
       home: FutureBuilder<Map<String, dynamic>?>(
-        future: checkAppData(),
+        future: _appData,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
@@ -352,15 +350,15 @@ class _JellyfinAppState extends State<JellyfinApp> with WidgetsBindingObserver {
                     children: [
                       const Icon(Icons.lock_outline, color: accent, size: 40),
                       const SizedBox(height: 16),
-                      const Text(
-                        'Nie można odczytać zapisanych danych logowania. Twoje dane nie zostały usunięte. Spróbuj ponownie.',
+                      Text(
+                        AppLocalizations.of(context)!.credentialStorageError,
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Colors.white),
                       ),
                       const SizedBox(height: 16),
                       FilledButton(
-                        onPressed: () => setState(() {}),
-                        child: const Text('Spróbuj ponownie'),
+                        onPressed: _reloadAppData,
+                        child: Text(AppLocalizations.of(context)!.tryAgain),
                       ),
                     ],
                   ),
@@ -369,9 +367,13 @@ class _JellyfinAppState extends State<JellyfinApp> with WidgetsBindingObserver {
             );
           }
 
+          if (data?['serverUnreachable'] == true) {
+            return _buildServerUnreachableScreen(context, background, accent);
+          }
+
           final libraries = data?['libraries'];
 
-          if (data != null && libraries.isNotEmpty) {
+          if (data != null && libraries is List<Library>) {
             final creds = data['creds'] as Map<String, String>;
 
             return LibrarySelectorScreen(
@@ -386,7 +388,7 @@ class _JellyfinAppState extends State<JellyfinApp> with WidgetsBindingObserver {
         },
       ),
       debugShowCheckedModeBanner: false,
-      title: 'Jellyfin Client',
+      title: 'JellyDawtyl',
       locale: _locale,
       supportedLocales: AppLocalizations.supportedLocales,
       scrollBehavior: const MaterialScrollBehavior().copyWith(
@@ -469,6 +471,49 @@ class _JellyfinAppState extends State<JellyfinApp> with WidgetsBindingObserver {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
+    );
+  }
+
+  Widget _buildServerUnreachableScreen(
+    BuildContext context,
+    Color background,
+    Color accent,
+  ) {
+    final l10n = AppLocalizations.of(context)!;
+    return Scaffold(
+      backgroundColor: background,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.cloud_off_rounded, color: accent, size: 48),
+              const SizedBox(height: 16),
+              Text(
+                l10n.serverUnreachable,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white),
+              ),
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: _reloadAppData,
+                child: Text(l10n.tryAgain),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.download_done_rounded),
+                label: Text(l10n.offlineFiles),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const DownloadsScreen(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -617,267 +662,6 @@ class _JellyfinAppState extends State<JellyfinApp> with WidgetsBindingObserver {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class LoginScreen extends StatefulWidget {
-  final String? initialUrl;
-  const LoginScreen({super.key, this.initialUrl});
-
-  @override
-  State<LoginScreen> createState() => _LoginScreenState();
-}
-
-class _LoginScreenState extends State<LoginScreen> {
-  late TextEditingController _urlController;
-  final _userController = TextEditingController();
-  final _passController = TextEditingController();
-  final _api = JellyfinApi();
-  bool _isLoading = false;
-  bool _trustInvalidCertificate = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _urlController = TextEditingController(
-      text: widget.initialUrl ?? "http://192.168.0.",
-    );
-    _trustInvalidCertificate = ServerCertificateTrust.trustsAddress(
-      _urlController.text,
-    );
-  }
-
-  Future<void> _setCertificateTrust(bool trusted) async {
-    final previousValue = _trustInvalidCertificate;
-    setState(() => _trustInvalidCertificate = trusted);
-    try {
-      await ServerCertificateTrust.setAddressTrusted(
-        storage: StorageService(),
-        address: _urlController.text,
-        trusted: trusted,
-      );
-    } catch (_) {
-      if (mounted) {
-        setState(() => _trustInvalidCertificate = previousValue);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Nie udało się zapisać ustawienia certyfikatu.'),
-          ),
-        );
-      }
-    }
-  }
-
-  void _onServerAddressChanged(String value) {
-    final trusted = ServerCertificateTrust.trustsAddress(value);
-    if (_trustInvalidCertificate != trusted) {
-      setState(() => _trustInvalidCertificate = trusted);
-    }
-  }
-
-  void _handleLogin() async {
-    setState(() => _isLoading = true);
-    final serverUrl = normalizeServerUrl(_urlController.text);
-    final result = await _api.login(
-      serverUrl,
-      _userController.text,
-      _passController.text,
-    );
-    setState(() => _isLoading = false);
-
-    if (result != null) {
-      await StorageService().saveCredentials(
-        serverUrl,
-        result['AccessToken'],
-        result['User']['Id'],
-      );
-      PlaybackSyncService.instance.onCredentialsChanged();
-      final libs = await _api.fetchUserLibraries(
-        serverUrl,
-        result['AccessToken'],
-        result['User']['Id'],
-      );
-
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => LibrarySelectorScreen(
-            libraries: libs,
-            baseUrl: serverUrl,
-            token: result['AccessToken'],
-            userId: result['User']['Id'],
-          ),
-        ),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(AppLocalizations.of(context)!.loginTitle)),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isWide = constraints.maxWidth >= 900;
-
-          return SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.all(isWide ? 32 : 20),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 460),
-                  child: Card(
-                    child: Padding(
-                      padding: EdgeInsets.all(isWide ? 28 : 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.primary.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Icon(
-                                  Icons.live_tv_rounded,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      AppLocalizations.of(context)!.welcome,
-                                      style: const TextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      AppLocalizations.of(
-                                        context,
-                                      )!.loginSubTitle,
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
-                          TextField(
-                            controller: _urlController,
-                            keyboardType: TextInputType.url,
-                            onChanged: _onServerAddressChanged,
-                            decoration: InputDecoration(
-                              labelText: AppLocalizations.of(
-                                context,
-                              )!.serverAddress,
-                              prefixIcon: const Icon(Icons.link_rounded),
-                            ),
-                          ),
-                          if (ServerCertificateTrust.addressUsesHttps(
-                            _urlController.text,
-                          )) ...[
-                            const SizedBox(height: 4),
-                            CheckboxListTile(
-                              contentPadding: EdgeInsets.zero,
-                              value: _trustInvalidCertificate,
-                              onChanged: _isLoading
-                                  ? null
-                                  : (value) =>
-                                        _setCertificateTrust(value ?? false),
-                              title: const Text(
-                                'Zaufaj certyfikatowi HTTPS serwera',
-                              ),
-                              subtitle: const Text(
-                                'Użyj tylko dla serwera z własnym lub niezaufanym certyfikatem.',
-                              ),
-                              controlAffinity: ListTileControlAffinity.leading,
-                            ),
-                          ],
-                          const SizedBox(height: 14),
-                          TextField(
-                            controller: _userController,
-                            decoration: InputDecoration(
-                              labelText: AppLocalizations.of(context)!.username,
-                              prefixIcon: const Icon(
-                                Icons.person_outline_rounded,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          TextField(
-                            controller: _passController,
-                            obscureText: true,
-                            decoration: InputDecoration(
-                              labelText: AppLocalizations.of(context)!.password,
-                              prefixIcon: const Icon(
-                                Icons.lock_outline_rounded,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          SizedBox(
-                            width: double.infinity,
-                            child: _isLoading
-                                ? const Center(
-                                    child: CircularProgressIndicator(),
-                                  )
-                                : ElevatedButton(
-                                    onPressed: _handleLogin,
-                                    child: Text(
-                                      AppLocalizations.of(context)!.loginButton,
-                                    ),
-                                  ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              icon: const Icon(Icons.download_done_rounded),
-                              label: Text(
-                                AppLocalizations.of(context)!.offlineFiles,
-                              ),
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        const DownloadsScreen(),
-                                  ),
-                                );
-                              },
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
       ),
     );
   }

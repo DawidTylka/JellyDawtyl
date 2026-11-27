@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../../../l10n/app_localizations.dart';
 
 class PlayerLoadingView extends StatelessWidget {
   const PlayerLoadingView({super.key});
@@ -41,10 +42,13 @@ class PlayerErrorView extends StatelessWidget {
             const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 64),
             Text(error, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 18)),
             const SizedBox(height: 24),
-            ElevatedButton(onPressed: onClose, child: const Text("Zamknij")),
+            ElevatedButton(
+              onPressed: onClose,
+              child: Text(AppLocalizations.of(context)!.close),
+            ),
           ],
         ),
       ),
     );
   }
-}
+}

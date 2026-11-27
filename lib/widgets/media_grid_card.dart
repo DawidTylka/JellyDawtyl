@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 class MediaGridCard extends StatelessWidget {
   final String title;
+  final String? subtitle;
   final ImageProvider? imageProvider;
   final Widget? image;
   final IconData fallbackIcon;
@@ -17,6 +18,7 @@ class MediaGridCard extends StatelessWidget {
   const MediaGridCard({
     super.key,
     required this.title,
+    this.subtitle,
     this.imageProvider,
     this.image,
     this.fallbackIcon = Icons.movie,
@@ -70,20 +72,38 @@ class MediaGridCard extends StatelessWidget {
                       end: Alignment.topCenter,
                     ),
                   ),
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (subtitle != null && subtitle!.isNotEmpty)
+                        Text(
+                          subtitle!,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
               ),
 
-              if (badgeIcon != null)
+              if (badgeIcon != null &&
+                  isWatched != true &&
+                  (unplayedCount ?? 0) <= 0)
                 Positioned(
                   top: 4,
                   right: 4,

@@ -101,6 +101,4 @@ class StorageService {
   Future<String?> getString(String key) async {
     return await _storage.read(key: key);
   }
-
-  Future<void> clearAll() async => await _storage.deleteAll();
 }

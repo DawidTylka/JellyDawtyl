@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import '../models/movie.dart';
 import '../models/library.dart';
@@ -16,23 +18,53 @@ String _redactedNetworkError(Object error) {
   return error.runtimeType.toString();
 }
 
-class JellyfinApi {
-  final Dio _dio = Dio();
+/// Raised when the server rejects the saved access token (HTTP 401/403).
+class JellyfinUnauthorizedException implements Exception {
+  const JellyfinUnauthorizedException();
+  @override
+  String toString() => 'JellyfinUnauthorizedException';
+}
 
-  Future<Map<String, dynamic>?> login(
+/// Raised when the server cannot be reached (no network, timeout, DNS, TLS).
+class JellyfinUnreachableException implements Exception {
+  const JellyfinUnreachableException();
+  @override
+  String toString() => 'JellyfinUnreachableException';
+}
+
+/// Reason a login attempt failed, so the login screen can say what happened.
+enum LoginFailure { invalidCredentials, unreachable, certificate, server }
+
+class LoginResult {
+  final Map<String, dynamic>? data;
+  final LoginFailure? failure;
+  const LoginResult.success(Map<String, dynamic> this.data) : failure = null;
+  const LoginResult.failure(LoginFailure this.failure) : data = null;
+  bool get isSuccess => data != null;
+}
+
+/// Shared timeouts: without them a request to an unreachable server can
+/// hang for minutes behind a modal loading dialog.
+final BaseOptions jellyfinDioOptions = BaseOptions(
+  connectTimeout: const Duration(seconds: 10),
+  receiveTimeout: const Duration(seconds: 30),
+);
+
+class JellyfinApi {
+  final Dio _dio = Dio(jellyfinDioOptions);
+
+  Future<LoginResult> loginWithResult(
     String url,
     String username,
     String password,
   ) async {
-    String fullUrl = url.startsWith('http') ? url : 'https://$url';
-
     try {
       // Jellyfin binds the issued token to DeviceId, so every installation
       // needs its own persistent identifier. It is sent only here: sessions
       // that already hold a token are not affected by the change.
       final deviceId = await StorageService().getDeviceId();
       final response = await _dio.post(
-        "$fullUrl/Users/AuthenticateByName",
+        "$url/Users/AuthenticateByName",
         data: {"Username": username, "Pw": password},
         options: Options(
           headers: {
@@ -40,10 +72,47 @@ class JellyfinApi {
           },
         ),
       );
-      return response.data;
+      final data = response.data;
+      if (data is Map && data['AccessToken'] is String) {
+        return LoginResult.success(Map<String, dynamic>.from(data));
+      }
+      return const LoginResult.failure(LoginFailure.server);
     } catch (e) {
       debugPrint('Błąd logowania (${_redactedNetworkError(e)}).');
-      return null;
+      return LoginResult.failure(classifyLoginError(e));
+    }
+  }
+
+  @visibleForTesting
+  static LoginFailure classifyLoginError(Object error) {
+    if (error is DioException) {
+      final status = error.response?.statusCode;
+      if (status == 401 || status == 403) {
+        return LoginFailure.invalidCredentials;
+      }
+      if (error.type == DioExceptionType.badCertificate ||
+          error.error is HandshakeException) {
+        return LoginFailure.certificate;
+      }
+      if (status == null) return LoginFailure.unreachable;
+    }
+    return LoginFailure.server;
+  }
+
+  /// Ends the session on the server, so the token stops working there too.
+  /// Failures are ignored: the app forgets the token either way.
+  Future<void> logout(String baseUrl, String token) async {
+    try {
+      await _dio.post(
+        '$baseUrl/Sessions/Logout',
+        options: Options(
+          headers: jellyfinAuthHeaders(token),
+          sendTimeout: const Duration(seconds: 5),
+          receiveTimeout: const Duration(seconds: 5),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Błąd wylogowania na serwerze (${_redactedNetworkError(e)}).');
     }
   }
 
@@ -53,14 +122,29 @@ class JellyfinApi {
     String token,
     String userId,
   ) async {
-    String fullUrl = url.startsWith('http') ? url : 'https://$url';
+    try {
+      return await fetchUserLibrariesOrThrow(url, token, userId);
+    } catch (e) {
+      debugPrint('Błąd bibliotek (${_redactedNetworkError(e)}).');
+      return [];
+    }
+  }
+
+  /// Like [fetchUserLibraries], but tells an expired token
+  /// ([JellyfinUnauthorizedException]) apart from a server that cannot be
+  /// reached ([JellyfinUnreachableException]).
+  Future<List<Library>> fetchUserLibrariesOrThrow(
+    String url,
+    String token,
+    String userId,
+  ) async {
     try {
       final response = await _dio.get(
-        "$fullUrl/UserViews",
+        "$url/UserViews",
         queryParameters: {"UserId": userId},
         options: Options(headers: jellyfinAuthHeaders(token)),
       );
-      final List data = response.data['Items'] ?? [];
+      final List<dynamic> data = response.data['Items'] ?? [];
       return data
           .where((item) {
             final type = item['CollectionType'];
@@ -77,9 +161,15 @@ class JellyfinApi {
           })
           .map((l) => Library.fromJson(l))
           .toList();
-    } catch (e) {
-      debugPrint('Błąd bibliotek (${_redactedNetworkError(e)}).');
-      return [];
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      // Only 401 means the token is gone. A 403 often comes from a proxy,
+      // a WAF or an access schedule, and must not wipe a valid login.
+      if (status == 401) throw const JellyfinUnauthorizedException();
+      if (status == null || status == 403) {
+        throw const JellyfinUnreachableException();
+      }
+      rethrow;
     }
   }
 
@@ -92,10 +182,9 @@ class JellyfinApi {
     String? parentId,
     int limit = 12,
   }) async {
-    String fullUrl = url.startsWith('http') ? url : 'https://$url';
     try {
       final response = await _dio.get(
-        "$fullUrl/UserItems/Resume",
+        "$url/UserItems/Resume",
         queryParameters: {
           "UserId": userId,
           "Limit": limit,
@@ -106,7 +195,7 @@ class JellyfinApi {
         },
         options: Options(headers: jellyfinAuthHeaders(token)),
       );
-      final List data = response.data['Items'] ?? [];
+      final List<dynamic> data = response.data['Items'] ?? [];
       return data.map((m) => Movie.fromJson(m)).toList();
     } catch (e) {
       debugPrint('Błąd Resume (${_redactedNetworkError(e)}).');
@@ -121,10 +210,9 @@ class JellyfinApi {
     String userId,
     String libraryId,
   ) async {
-    String fullUrl = url.startsWith('http') ? url : 'https://$url';
     try {
       final response = await _dio.get(
-        "$fullUrl/Items/Latest",
+        "$url/Items/Latest",
         queryParameters: {
           "UserId": userId,
           "ParentId": libraryId,
@@ -132,7 +220,7 @@ class JellyfinApi {
         },
         options: Options(headers: jellyfinAuthHeaders(token)),
       );
-      final List data = response.data ?? [];
+      final List<dynamic> data = response.data ?? [];
       return data.map((m) => Movie.fromJson(m)).toList();
     } catch (e) {
       debugPrint('Błąd Latest (${_redactedNetworkError(e)}).');
@@ -140,37 +228,41 @@ class JellyfinApi {
     }
   }
 
-  // D. Pobiera WSZYSTKO w bibliotece
+  // D. Pobiera zawartość biblioteki stronami (Limit/StartIndex)
   Future<List<Movie>> fetchAllInLibrary(
     String url,
     String token,
     String userId,
-    String libraryId,
-  ) async {
-    String fullUrl = url.startsWith('http') ? url : 'https://$url';
-    try {
-      final response = await _dio.get(
-        "$fullUrl/Items",
-        queryParameters: {
-          "UserId": userId,
-          "ParentId": libraryId,
-          "Recursive": true,
-          "IncludeItemTypes": "Movie,Series",
-          "Fields":
-              "PrimaryImageAspectRatio,Overview,Type,UserData,RunTimeTicks",
-          "SortBy": "SortName",
-          "SortOrder": "Ascending",
-        },
-        options: Options(headers: jellyfinAuthHeaders(token)),
-      );
+    String libraryId, {
+    int startIndex = 0,
+    int limit = libraryPageSize,
+    String? searchTerm,
+  }) async {
+    // Errors reach the caller: an empty page would look like the end of the
+    // library and stop paging.
+    final response = await _dio.get(
+      "$url/Items",
+      queryParameters: {
+        "UserId": userId,
+        "ParentId": libraryId,
+        "Recursive": true,
+        "IncludeItemTypes": "Movie,Series",
+        "Fields": "PrimaryImageAspectRatio,Type,UserData,RunTimeTicks",
+        "SortBy": "SortName",
+        "SortOrder": "Ascending",
+        "StartIndex": startIndex,
+        "Limit": limit,
+        "SearchTerm": ?searchTerm,
+        "EnableTotalRecordCount": false,
+      },
+      options: Options(headers: jellyfinAuthHeaders(token)),
+    );
 
-      final List data = response.data['Items'] ?? [];
-      return data.map((m) => Movie.fromJson(m)).toList();
-    } catch (e) {
-      debugPrint('Błąd AllInLibrary (${_redactedNetworkError(e)}).');
-      return [];
-    }
+    final List<dynamic> data = response.data['Items'] ?? [];
+    return data.map((m) => Movie.fromJson(m)).toList();
   }
+
+  static const int libraryPageSize = 100;
 
   Future<List<Episode>> fetchEpisodes(
     String url,
@@ -179,16 +271,15 @@ class JellyfinApi {
     String seriesId,
   ) async {
     try {
-      String fullUrl = url.startsWith('http') ? url : 'https://$url';
       final response = await _dio.get(
-        "$fullUrl/Shows/$seriesId/Episodes",
+        "$url/Shows/$seriesId/Episodes",
         queryParameters: {
           "UserId": userId,
           "Fields": "Overview,PrimaryImageAspectRatio,UserData,RunTimeTicks",
         },
         options: Options(headers: jellyfinAuthHeaders(token)),
       );
-      final List data = response.data['Items'] ?? [];
+      final List<dynamic> data = response.data['Items'] ?? [];
       return data.map((e) => Episode.fromJson(e)).toList();
     } catch (e) {
       debugPrint('Błąd pobierania odcinków (${_redactedNetworkError(e)}).');
@@ -196,6 +287,9 @@ class JellyfinApi {
     }
   }
 
+  /// Reports playback to `/Sessions/Playing` (start), `/Progress` or
+  /// `/Stopped`. [playSessionId] ties the reports to a transcoding job so the
+  /// server can stop ffmpeg as soon as the session ends.
   Future<bool> reportPlaybackProgress({
     required String baseUrl,
     required String token,
@@ -204,19 +298,28 @@ class JellyfinApi {
     required Duration position,
     required bool isPaused,
     required bool isStopped,
+    bool isStart = false,
+    String? playSessionId,
+    String? mediaSourceId,
+    String? playMethod,
   }) async {
-    final dio = Dio();
-    int ticks = position.inMicroseconds * 10;
-
-    final String action = isStopped
-        ? "Stopped"
-        : (isPaused ? "Progress" : "Progress");
-    final String url = "$baseUrl/Sessions/Playing/$action";
+    final int ticks = position.inMicroseconds * 10;
+    final String url = isStart
+        ? "$baseUrl/Sessions/Playing"
+        : "$baseUrl/Sessions/Playing/${isStopped ? 'Stopped' : 'Progress'}";
 
     try {
-      await dio.post(
+      await _dio.post(
         url,
-        data: {"ItemId": itemId, "PositionTicks": ticks, "IsPaused": isPaused},
+        data: {
+          "ItemId": itemId,
+          "PositionTicks": ticks,
+          "IsPaused": isPaused,
+          "CanSeek": true,
+          "PlaySessionId": ?playSessionId,
+          "MediaSourceId": ?mediaSourceId,
+          "PlayMethod": ?playMethod,
+        },
         options: Options(headers: jellyfinAuthHeaders(token)),
       );
       return true;
@@ -224,6 +327,81 @@ class JellyfinApi {
       debugPrint('Błąd raportowania postępu (${_redactedNetworkError(e)}).');
       return false;
     }
+  }
+
+  /// Skippable segments (intro, credits, recap, preview, commercial) of an
+  /// item. Jellyfin 10.10+ serves them at `/MediaSegments/{id}`, filled by
+  /// the Intro Skipper plugin among others. Older Intro Skipper versions
+  /// only expose `/Episode/{id}/IntroSkipperSegments`, used as a fallback.
+  /// Returns raw JSON maps as stored in download sidecars; parse them with
+  /// `MediaSegment.listFromJson`.
+  Future<List<Map<String, dynamic>>> fetchMediaSegments({
+    required String baseUrl,
+    required String token,
+    required String itemId,
+  }) async {
+    final options = Options(
+      headers: jellyfinAuthHeaders(token),
+      receiveTimeout: const Duration(seconds: 10),
+    );
+    try {
+      final response = await _dio.get(
+        '$baseUrl/MediaSegments/$itemId',
+        options: options,
+      );
+      final items = (response.data is Map) ? response.data['Items'] : null;
+      if (items is List && items.isNotEmpty) {
+        return items
+            .whereType<Map<dynamic, dynamic>>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('Brak segmentów MediaSegments (${_redactedNetworkError(e)}).');
+    }
+    try {
+      final response = await _dio.get(
+        '$baseUrl/Episode/$itemId/IntroSkipperSegments',
+        options: options,
+      );
+      final data = response.data;
+      if (data is Map) return introSkipperToMediaSegments(data);
+    } catch (e) {
+      debugPrint('Brak segmentów Intro Skipper (${_redactedNetworkError(e)}).');
+    }
+    return [];
+  }
+
+  /// Converts the legacy Intro Skipper answer (seconds, keyed by analysis
+  /// mode) to the `/MediaSegments` shape (ticks, `Type`).
+  @visibleForTesting
+  static List<Map<String, dynamic>> introSkipperToMediaSegments(
+    Map<dynamic, dynamic> data,
+  ) {
+    const types = {
+      'introduction': 'Intro',
+      'intro': 'Intro',
+      'credits': 'Outro',
+      'outro': 'Outro',
+      'recap': 'Recap',
+      'preview': 'Preview',
+      'commercial': 'Commercial',
+    };
+    final result = <Map<String, dynamic>>[];
+    data.forEach((key, value) {
+      final type = types[key.toString().toLowerCase()];
+      if (type == null || value is! Map) return;
+      if (value['Valid'] == false) return;
+      final start = value['IntroStart'] ?? value['Start'];
+      final end = value['IntroEnd'] ?? value['End'];
+      if (start is! num || end is! num || end <= start) return;
+      result.add({
+        'Type': type,
+        'StartTicks': (start * 10000000).round(),
+        'EndTicks': (end * 10000000).round(),
+      });
+    });
+    return result;
   }
 
   /// Fetches only the per-user playback data for a bounded set of known items.
@@ -250,7 +428,7 @@ class JellyfinApi {
       final items = (response.data as Map?)?['Items'];
       if (items is! List) return [];
       return items
-          .whereType<Map>()
+          .whereType<Map<dynamic, dynamic>>()
           .map((item) => Map<String, dynamic>.from(item))
           .toList();
     } catch (error) {
@@ -273,6 +451,9 @@ class JellyfinApi {
       );
       return response.data['Name'];
     } catch (e) {
+      debugPrint(
+        'Błąd pobierania nazwy serialu (${_redactedNetworkError(e)}).',
+      );
       return null;
     }
   }
@@ -314,7 +495,7 @@ class JellyfinApi {
         final streams = data['MediaStreams'] as List<dynamic>?;
         if (streams != null) {
           final videoStream = streams.cast<Map<String, dynamic>?>().firstWhere(
-            (s) => s != null && (s['Type'] == 'Video' || s['Type'] == 'Video'),
+            (s) => s != null && s['Type'] == 'Video',
             orElse: () => null,
           );
           if (videoStream != null) {
@@ -325,14 +506,12 @@ class JellyfinApi {
         }
       }
 
-      final meta = {
+      return {
         'Width': width,
         'Height': height,
         'Bitrate': bitrate,
         'raw': data,
       };
-      debugPrint('fetchItemMediaInfo: $itemId -> $meta');
-      return meta;
     } catch (e) {
       debugPrint('Błąd pobierania mediów (${_redactedNetworkError(e)}).');
       return null;
@@ -383,11 +562,10 @@ class JellyfinApi {
     String? parentId,
     int limit = 24,
   }) async {
-    String fullUrl = url.startsWith('http') ? url : 'https://$url';
     final cutoff = DateTime.now().toUtc().subtract(const Duration(days: 365));
     try {
       final response = await _dio.get(
-        "$fullUrl/Shows/NextUp",
+        "$url/Shows/NextUp",
         queryParameters: {
           "UserId": userId,
           "Limit": limit,
@@ -401,7 +579,7 @@ class JellyfinApi {
         options: Options(headers: jellyfinAuthHeaders(token)),
       );
 
-      final List data = response.data['Items'] ?? [];
+      final List<dynamic> data = response.data['Items'] ?? [];
       return data.map((m) => Movie.fromJson(m)).toList();
     } catch (e) {
       debugPrint('Błąd NextUp (${_redactedNetworkError(e)}).');
@@ -409,34 +587,32 @@ class JellyfinApi {
     }
   }
 
-  Future<List<Movie>> fetchFavorites(
+  /// Favorites with what the favorites screen sorts and groups by.
+  Future<List<Movie>> fetchFavoritesOrThrow(
     String url,
     String token,
-    String userId,
-  ) async {
-    String fullUrl = url.startsWith('http') ? url : 'https://$url';
-    try {
-      final response = await _dio.get(
-        "$fullUrl/Items",
-        queryParameters: {
-          "UserId": userId,
-          "Recursive": true,
-          "Filters": "IsFavorite", // Magiczny filtr API Jellyfina!
-          "IncludeItemTypes": "Movie,Series,Episode",
-          "Fields":
-              "PrimaryImageAspectRatio,Overview,Type,UserData,RunTimeTicks",
-          "SortBy": "SortName",
-          "SortOrder": "Ascending",
-        },
-        options: Options(headers: jellyfinAuthHeaders(token)),
-      );
-
-      final List data = response.data['Items'] ?? [];
-      return data.map((m) => Movie.fromJson(m)).toList();
-    } catch (e) {
-      debugPrint('Błąd pobierania ulubionych (${_redactedNetworkError(e)}).');
-      return [];
-    }
+    String userId, {
+    String sortBy = 'SortName',
+    String sortOrder = 'Ascending',
+  }) async {
+    final response = await _dio.get<dynamic>(
+      "$url/Items",
+      queryParameters: {
+        "UserId": userId,
+        "Recursive": true,
+        "Filters": "IsFavorite",
+        "IncludeItemTypes": "Movie,Series,Episode",
+        "Fields":
+            "PrimaryImageAspectRatio,Overview,Type,UserData,RunTimeTicks,DateCreated",
+        "SortBy": sortBy,
+        "SortOrder": sortOrder,
+      },
+      options: Options(headers: jellyfinAuthHeaders(token)),
+    );
+    final List<dynamic> data = (response.data as Map?)?['Items'] ?? [];
+    return data
+        .map((m) => Movie.fromJson(Map<String, dynamic>.from(m as Map)))
+        .toList();
   }
 
   Future<bool> setFavorite({
@@ -446,8 +622,7 @@ class JellyfinApi {
     required String itemId,
     required bool isFavorite,
   }) async {
-    final fullUrl = baseUrl.startsWith('http') ? baseUrl : 'https://$baseUrl';
-    final url = '$fullUrl/UserFavoriteItems/$itemId';
+    final url = '$baseUrl/UserFavoriteItems/$itemId';
     final query = {'UserId': userId};
 
     try {
@@ -471,8 +646,7 @@ class JellyfinApi {
     required String itemId,
     required bool played,
   }) async {
-    final fullUrl = baseUrl.startsWith('http') ? baseUrl : 'https://$baseUrl';
-    final url = '$fullUrl/UserPlayedItems/$itemId';
+    final url = '$baseUrl/UserPlayedItems/$itemId';
     final query = {'UserId': userId};
 
     try {
@@ -489,5 +663,90 @@ class JellyfinApi {
       );
       return false;
     }
+  }
+
+  /// Everything the details screen shows: the single-item endpoint returns
+  /// people, genres, chapters and media sources without extra fields.
+  Future<Map<String, dynamic>?> fetchItemDetails({
+    required String baseUrl,
+    required String token,
+    required String userId,
+    required String itemId,
+  }) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        '$baseUrl/Items/$itemId',
+        queryParameters: {'UserId': userId},
+        options: Options(headers: jellyfinAuthHeaders(token)),
+      );
+      final data = response.data;
+      return data is Map ? Map<String, dynamic>.from(data) : null;
+    } catch (e) {
+      debugPrint('Błąd szczegółów pozycji (${_redactedNetworkError(e)}).');
+      return null;
+    }
+  }
+
+  /// The episodes before and after [episodeId] (the server returns up to
+  /// three: previous, this one and next).
+  Future<List<Episode>> fetchAdjacentEpisodes({
+    required String baseUrl,
+    required String token,
+    required String userId,
+    required String seriesId,
+    required String episodeId,
+  }) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        '$baseUrl/Shows/$seriesId/Episodes',
+        queryParameters: {
+          'UserId': userId,
+          'AdjacentTo': episodeId,
+          'Fields': 'Overview',
+        },
+        options: Options(headers: jellyfinAuthHeaders(token)),
+      );
+      final items = (response.data as Map?)?['Items'];
+      if (items is! List) return const [];
+      return items
+          .whereType<Map<dynamic, dynamic>>()
+          .map((e) => Episode.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      debugPrint('Błąd sąsiednich odcinków (${_redactedNetworkError(e)}).');
+      return const [];
+    }
+  }
+
+  /// Searches the whole server (all libraries) for movies, series and
+  /// episodes.
+  Future<List<Movie>> searchItems({
+    required String baseUrl,
+    required String token,
+    required String userId,
+    required String query,
+    String? parentId,
+    int limit = 60,
+  }) async {
+    final response = await _dio.get<dynamic>(
+      '$baseUrl/Items',
+      queryParameters: {
+        'UserId': userId,
+        'SearchTerm': query,
+        'ParentId': ?parentId,
+        'Recursive': true,
+        'IncludeItemTypes': 'Movie,Series,Episode',
+        'Fields': 'PrimaryImageAspectRatio,Overview,UserData,RunTimeTicks',
+        'Limit': limit,
+        'EnableTotalRecordCount': false,
+      },
+      options: Options(headers: jellyfinAuthHeaders(token)),
+    );
+    final items = (response.data as Map?)?['Items'];
+    if (items is! List) return const [];
+    return items
+        .whereType<Map<dynamic, dynamic>>()
+        .map((m) => Movie.fromJson(Map<String, dynamic>.from(m)))
+        .toList();
   }
 }

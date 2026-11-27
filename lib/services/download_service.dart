@@ -56,6 +56,9 @@ class DownloadService {
   );
   final ValueNotifier<Map<String, DownloadStatus>> activeDownloads =
       ValueNotifier({});
+
+  /// Display names of items in [activeDownloads], for the downloads screen.
+  final Map<String, String> downloadTitles = {};
   final ValueNotifier<List<Map<String, dynamic>>> failedDownloads =
       ValueNotifier([]);
 
@@ -94,10 +97,17 @@ class DownloadService {
   Future<void> _saveFailedDownloads() =>
       _persist('failed_downloads_v1', jsonEncode(failedDownloads.value));
 
+  static String? _recordPath(Map<String, dynamic>? record) {
+    final dir = record?['saveDir'];
+    final name = record?['fileName'];
+    return dir is String && name is String ? '$dir/$name' : null;
+  }
+
   Future<void> _registerFailedDownload(
     String itemId,
     Map<String, dynamic> record,
   ) async {
+    await _restoreSetAsideCopy(_recordPath(record));
     // A download the user cancelled is not a failure to offer for retry.
     if (_cancelledItemIds.contains(itemId)) return;
     final failure = {...record, 'itemId': itemId};
@@ -160,40 +170,44 @@ class DownloadService {
           };
           await _saveBackgroundTasks();
         } else {
-          await _downloadQueue.enqueue(itemId, () async {
-            if (cancelled()) return;
-            final cancelToken = CancelToken();
-            _cancelTokens[itemId] = cancelToken;
-            _desktopTargets[itemId] =
-                '${record['saveDir']}/${record['fileName']}';
-            final downloader = DioDownloader(cancelToken: cancelToken);
-            try {
-              await downloader.downloadVideo(
-                itemId: itemId,
-                downloadUrl: record['url'] as String,
-                saveDir: record['saveDir'] as String,
-                fileName: record['fileName'] as String,
-                token: record['token'] as String,
-                wifiOnly: !(record['allowCellular'] as bool? ?? false),
-                showNotification: false,
-                onProgress: (id, value, text) {
-                  if (cancelled()) return;
-                  _updateProgress(
+          // Not awaited: the queue runs as many transfers as the limit allows
+          // instead of retrying one file at a time.
+          unawaited(
+            _downloadQueue.enqueue(itemId, () async {
+              if (cancelled()) return;
+              final cancelToken = CancelToken();
+              _cancelTokens[itemId] = cancelToken;
+              _desktopTargets[itemId] =
+                  '${record['saveDir']}/${record['fileName']}';
+              final downloader = DioDownloader(cancelToken: cancelToken);
+              try {
+                await downloader.downloadVideo(
+                  itemId: itemId,
+                  downloadUrl: record['url'] as String,
+                  saveDir: record['saveDir'] as String,
+                  fileName: record['fileName'] as String,
+                  token: record['token'] as String,
+                  wifiOnly: !(record['allowCellular'] as bool? ?? false),
+                  showNotification: false,
+                  onProgress: (id, value, text) {
+                    if (cancelled()) return;
+                    _updateProgress(
+                      id,
+                      progressValue: value,
+                      progressText: text,
+                    );
+                  },
+                  onFinished: (id) => _finishDownload(
                     id,
-                    progressValue: value,
-                    progressText: text,
-                  );
-                },
-                onFinished: (id) => _finishDownload(
-                  id,
-                  '${record['saveDir']}/${record['fileName']}',
-                ),
-                onFailed: (id) => _registerFailedDownload(id, record),
-              );
-            } finally {
-              _releaseCancelToken(itemId, cancelToken);
-            }
-          });
+                    '${record['saveDir']}/${record['fileName']}',
+                  ),
+                  onFailed: (id) => _registerFailedDownload(id, record),
+                );
+              } finally {
+                _releaseCancelToken(itemId, cancelToken);
+              }
+            }),
+          );
         }
       } catch (error) {
         debugPrint(
@@ -255,7 +269,7 @@ class DownloadService {
     if (record != null) await _saveBackgroundTasks();
     if (preparation != null) await _savePendingMetadataPreparations();
     _cancelTokens.remove(itemId)?.cancel();
-    _desktopTargets.remove(itemId);
+    final desktopTarget = _desktopTargets.remove(itemId);
 
     if (Platform.isAndroid && record != null) {
       final saveDir = record['saveDir'] as String?;
@@ -274,7 +288,12 @@ class DownloadService {
         try {
           final tasks = await FlutterDownloader.loadTasks() ?? [];
           for (final task in tasks) {
-            if (task.savedDir == saveDir &&
+            if (task.taskId == knownTaskId &&
+                task.status == DownloadTaskStatus.complete) {
+              // The video is already on disk (only metadata was pending):
+              // removing the task would delete it, e.g. on logout.
+              taskIds.remove(task.taskId);
+            } else if (task.savedDir == saveDir &&
                 task.filename == fileName &&
                 _isActiveAndroidTask(task.status)) {
               taskIds.add(task.taskId);
@@ -288,6 +307,7 @@ class DownloadService {
         }
       }
     }
+    await _restoreSetAsideCopy(desktopTarget ?? _recordPath(record));
 
     activeDownloads.value = Map<String, DownloadStatus>.from(
       activeDownloads.value,
@@ -330,6 +350,23 @@ class DownloadService {
     }
   }
 
+  /// Called at logout. Every queued, running or failed download holds the
+  /// access token of the account that is logging out, so all of them are
+  /// cancelled and forgotten. Files already downloaded are kept.
+  Future<void> cancelAllAndForgetTokens() async {
+    final itemIds = <String>{
+      ..._backgroundTasks.keys,
+      ..._pendingMetadataPreparations.keys,
+      ..._cancelTokens.keys,
+      ...activeDownloads.value.keys,
+    };
+    for (final itemId in itemIds) {
+      await cancelDownload(itemId);
+    }
+    failedDownloads.value = [];
+    await _saveFailedDownloads();
+  }
+
   Future<void> _cancelOrphanedAndroidTasks(List<DownloadTask> tasks) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     for (final entry in _cancelledAndroidTargets.entries.toList()) {
@@ -350,10 +387,18 @@ class DownloadService {
     }
   }
 
-  Future<void> initializeBackgroundDownloads() async {
-    if (!Platform.isAndroid ||
-        _backgroundInitialized ||
-        (_backgroundSyncTimer?.isActive ?? false)) {
+  Future<void>? _backgroundInitFuture;
+
+  /// Restores Android background downloads once. Concurrent callers (a whole
+  /// season queued at once) wait for the same restore, so records they add
+  /// are never overwritten by the stored copy loaded a moment later.
+  Future<void> initializeBackgroundDownloads() {
+    if (!Platform.isAndroid) return Future<void>.value();
+    return _backgroundInitFuture ??= _initializeBackgroundDownloads();
+  }
+
+  Future<void> _initializeBackgroundDownloads() async {
+    if (_backgroundInitialized || (_backgroundSyncTimer?.isActive ?? false)) {
       return;
     }
     _backgroundInitialized = true;
@@ -361,18 +406,24 @@ class DownloadService {
       final encoded = await _storage.getString('background_downloads_v1');
       if (encoded != null && encoded.isNotEmpty) {
         final decoded = jsonDecode(encoded) as Map<String, dynamic>;
-        _backgroundTasks = decoded.map(
+        final stored = decoded.map(
           (id, value) => MapEntry(id, Map<String, dynamic>.from(value as Map)),
         );
+        // Records added while the stored copy was loading win.
+        _backgroundTasks = {...stored, ..._backgroundTasks};
       }
       final metadataEncoded = await _storage.getString(
         'background_metadata_preparations_v1',
       );
       if (metadataEncoded != null && metadataEncoded.isNotEmpty) {
         final decoded = jsonDecode(metadataEncoded) as Map<String, dynamic>;
-        _pendingMetadataPreparations = decoded.map(
+        final stored = decoded.map(
           (id, value) => MapEntry(id, Map<String, dynamic>.from(value as Map)),
         );
+        _pendingMetadataPreparations = {
+          ...stored,
+          ..._pendingMetadataPreparations,
+        };
       }
       await updateConcurrencyLimit();
       await _syncBackgroundDownloads();
@@ -384,7 +435,71 @@ class DownloadService {
     } catch (e) {
       debugPrint('Nie udało się odtworzyć pobrań w tle (${e.runtimeType}).');
       _backgroundInitialized = false;
+      _backgroundInitFuture = null;
     }
+  }
+
+  final Map<String, Future<void>> _pathLocks = {};
+
+  /// Runs [action] alone for [path]. Episodes of one series share the folder
+  /// cover and series.json; parallel downloads used to write and delete the
+  /// same file at once, which fails on Windows and corrupts JSON elsewhere.
+  Future<T> _withPathLock<T>(String path, Future<T> Function() action) {
+    final previous = _pathLocks[path] ?? Future<void>.value();
+    final result = previous.then((_) => action());
+    final tail = result.then<void>((_) {}, onError: (Object _) {});
+    _pathLocks[path] = tail;
+    tail.whenComplete(() {
+      if (identical(_pathLocks[path], tail)) _pathLocks.remove(path);
+    });
+    return result;
+  }
+
+  /// Writes through a temporary file and a rename, so a reader never sees
+  /// half of a file and a crash mid-write keeps the previous version.
+  Future<void> _writeStringAtomic(String path, String content) {
+    return _withPathLock(path, () async {
+      final temp = File('$path.${DateTime.now().microsecondsSinceEpoch}.tmp');
+      try {
+        await temp.writeAsString(content, flush: true);
+        await temp.rename(path);
+      } catch (_) {
+        try {
+          if (await temp.exists()) await temp.delete();
+        } catch (_) {}
+        rethrow;
+      }
+    });
+  }
+
+  /// Downloads an image once; a failure only costs the picture.
+  Future<void> _downloadImageOnce(
+    Dio dio,
+    String url,
+    String path,
+    String token,
+  ) {
+    return _withPathLock(path, () async {
+      final target = File(path);
+      if (await target.exists()) return;
+      final temp = File('$path.${DateTime.now().microsecondsSinceEpoch}.tmp');
+      try {
+        await dio.download(
+          url,
+          temp.path,
+          options: Options(headers: jellyfinAuthHeaders(token)),
+        );
+        if (await temp.length() >= 500 && !await target.exists()) {
+          await temp.rename(path);
+        }
+      } catch (error) {
+        debugPrint('Nie udało się pobrać grafiki (${error.runtimeType}).');
+      } finally {
+        try {
+          if (await temp.exists()) await temp.delete();
+        } catch (_) {}
+      }
+    });
   }
 
   Future<void> _persistenceTail = Future<void>.value();
@@ -406,47 +521,65 @@ class DownloadService {
     );
   }
 
+  /// How many metadata preparations may run at once. Each runs on its own,
+  /// so one episode stuck waiting for Wi-Fi no longer blocks the others.
+  static const _maxParallelMetadataPreparations = 3;
+
   Future<void> _processPendingMetadataPreparations() async {
     if (!Platform.isAndroid || !FlutterDownloader.initialized) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
     for (final entry in _pendingMetadataPreparations.entries.toList()) {
+      if (_preparingMetadataItemIds.length >=
+          _maxParallelMetadataPreparations) {
+        break;
+      }
       final itemId = entry.key;
       if (_enqueueingItemIds.contains(itemId)) continue;
-      if (!_preparingMetadataItemIds.add(itemId)) continue;
-      try {
-        final preparation = entry.value;
-        final retryAt = preparation['retryAt'] as int? ?? 0;
-        if (retryAt > DateTime.now().millisecondsSinceEpoch) continue;
-        await _downloadJsonMetadata(
-          itemId: itemId,
-          baseUrl: normalizeServerUrl(preparation['baseUrl'] as String),
-          token: preparation['token'] as String,
-          userId: preparation['userId'] as String,
-          seriesId: preparation['seriesId'] as String?,
-          seriesDir: Directory(preparation['seriesDir'] as String),
-          fileName: preparation['fileName'] as String,
-        );
+      if (_preparingMetadataItemIds.contains(itemId)) continue;
+      final retryAt = entry.value['retryAt'] as int? ?? 0;
+      if (retryAt > now) continue;
+      _preparingMetadataItemIds.add(itemId);
+      unawaited(_prepareMetadata(itemId, entry.value));
+    }
+  }
+
+  Future<void> _prepareMetadata(
+    String itemId,
+    Map<String, dynamic> preparation,
+  ) async {
+    try {
+      await _downloadJsonMetadata(
+        itemId: itemId,
+        baseUrl: normalizeServerUrl(preparation['baseUrl'] as String),
+        token: preparation['token'] as String,
+        userId: preparation['userId'] as String,
+        seriesId: preparation['seriesId'] as String?,
+        seriesDir: Directory(preparation['seriesDir'] as String),
+        fileName: preparation['fileName'] as String,
+      );
+      if (identical(_pendingMetadataPreparations[itemId], preparation)) {
         _pendingMetadataPreparations.remove(itemId);
         await _savePendingMetadataPreparations();
-      } catch (error) {
-        final preparation = _pendingMetadataPreparations[itemId];
-        if (preparation != null) {
-          final attempts = (preparation['attempts'] as int? ?? 0) + 1;
-          final delaySeconds = (15 * (1 << (attempts - 1).clamp(0, 5))).clamp(
-            15,
-            480,
-          );
-          preparation['attempts'] = attempts;
-          preparation['retryAt'] = DateTime.now()
-              .add(Duration(seconds: delaySeconds))
-              .millisecondsSinceEpoch;
-          await _savePendingMetadataPreparations();
-        }
-        debugPrint(
-          'Przygotowanie metadanych $itemId nie powiodło się (${error.runtimeType}); ponowię przy następnym sprawdzeniu.',
-        );
-      } finally {
-        _preparingMetadataItemIds.remove(itemId);
       }
+    } catch (error) {
+      final current = _pendingMetadataPreparations[itemId];
+      if (current != null) {
+        final attempts = (current['attempts'] as int? ?? 0) + 1;
+        final delaySeconds = (15 * (1 << (attempts - 1).clamp(0, 5))).clamp(
+          15,
+          480,
+        );
+        current['attempts'] = attempts;
+        current['retryAt'] = DateTime.now()
+            .add(Duration(seconds: delaySeconds))
+            .millisecondsSinceEpoch;
+        await _savePendingMetadataPreparations();
+      }
+      debugPrint(
+        'Przygotowanie metadanych $itemId nie powiodło się (${error.runtimeType}); ponowię przy następnym sprawdzeniu.',
+      );
+    } finally {
+      _preparingMetadataItemIds.remove(itemId);
     }
   }
 
@@ -695,7 +828,26 @@ class DownloadService {
     }
   }
 
-  Future<String> getDirectoryPath() async {
+  Future<String>? _directoryPathCache;
+
+  /// Must be called after `setting_download_path` changes.
+  void invalidateDirectoryPathCache() => _directoryPathCache = null;
+
+  /// The download root. Cached: checking a season of episodes used to read
+  /// the setting from secure storage once per episode and quality.
+  Future<String> getDirectoryPath() {
+    final cached = _directoryPathCache;
+    if (cached != null) return cached;
+    final future = _resolveDirectoryPath();
+    _directoryPathCache = future;
+    future.catchError((Object _) {
+      if (identical(_directoryPathCache, future)) _directoryPathCache = null;
+      return '';
+    });
+    return future;
+  }
+
+  Future<String> _resolveDirectoryPath() async {
     final customPath = await _storage.getString('setting_download_path');
 
     if (customPath != null && customPath.isNotEmpty) {
@@ -707,6 +859,12 @@ class DownloadService {
     } else if (Platform.isWindows) {
       final directory = await getApplicationSupportDirectory();
       return "${directory.path}\\JellyDawtyl";
+    } else if (Platform.isLinux || Platform.isMacOS) {
+      // ~/Downloads when the platform has one, the documents folder otherwise.
+      final directory =
+          await getDownloadsDirectory() ??
+          await getApplicationDocumentsDirectory();
+      return "${directory.path}/JellyDawtyl";
     }
 
     return "";
@@ -766,6 +924,13 @@ class DownloadService {
         .replaceFirst(RegExp(r'[. ]+$'), '');
   }
 
+  @visibleForTesting
+  Map<String, String> generatePathsForTest(
+    JellyfinItem item,
+    String? seriesOverrideName,
+    String qualityLabel,
+  ) => _generatePaths(item, seriesOverrideName, qualityLabel);
+
   /// Paths for new downloads. The item ID in the file name keeps two items
   /// with the same title (or a title without Latin letters) apart.
   Map<String, String> _generatePaths(
@@ -811,11 +976,17 @@ class DownloadService {
     int? bitrate,
     required String qualityLabel,
     String? seriesOverrideName,
+    bool force = false,
   }) async {
     if (Platform.isAndroid) await initializeBackgroundDownloads();
     await updateConcurrencyLimit();
     final String itemId = item.id;
     if (activeDownloads.value.containsKey(itemId)) return;
+    downloadTitles[itemId] = item.type == 'Episode'
+        ? '${seriesOverrideName ?? item.seriesName ?? ''} '
+                  'S${item.parentIndexNumber ?? 0}E${item.indexNumber ?? 0} · ${item.name}'
+              .trim()
+        : item.name;
     _cancelledItemIds.remove(itemId);
     final generation = _cancelGenerations[itemId] ?? 0;
     bool cancelled() => (_cancelGenerations[itemId] ?? 0) != generation;
@@ -843,7 +1014,21 @@ class DownloadService {
       }
 
       final String baseDir = await getDirectoryPath();
-      if (baseDir.isEmpty) return;
+      if (baseDir.isEmpty) {
+        // No usable folder: say so instead of leaving "Waiting..." forever.
+        _updateProgress(
+          itemId,
+          progressText: 'Brak folderu pobierania — wybierz go w ustawieniach',
+        );
+        Future.delayed(const Duration(seconds: 5), () {
+          if (activeDownloads.value[itemId]?.isDownloaded == false) {
+            activeDownloads.value = Map<String, DownloadStatus>.from(
+              activeDownloads.value,
+            )..remove(itemId);
+          }
+        });
+        return;
+      }
 
       if (cancelled()) return;
 
@@ -867,16 +1052,23 @@ class DownloadService {
       if (!seriesDir.existsSync()) seriesDir.createSync(recursive: true);
 
       final targetFile = File('${seriesDir.path}/$fileName');
+      final legacyFile = File(
+        '$baseDir/${legacyPaths["folder"]}/${legacyPaths["file"]}',
+      );
+      if (force && !_backgroundTasks.containsKey(itemId)) {
+        // "Download again": set the old copy aside instead of deleting it,
+        // so a failed or cancelled download gives it back. It also keeps the
+        // Android worker from mistaking the old file for a partial one.
+        await _setAsideCopy(targetFile.path);
+      }
       if (!_backgroundTasks.containsKey(itemId) &&
           await targetFile.exists() &&
           await targetFile.length() > 0) {
         _finishDownload(itemId, targetFile.path);
         return;
       }
-      final legacyFile = File(
-        '$baseDir/${legacyPaths["folder"]}/${legacyPaths["file"]}',
-      );
-      if (!_backgroundTasks.containsKey(itemId) &&
+      if (!force &&
+          !_backgroundTasks.containsKey(itemId) &&
           await legacyFile.exists() &&
           await legacyFile.length() > 0 &&
           _legacyFileBelongsTo(legacyFile.path, itemId)) {
@@ -1083,6 +1275,39 @@ class DownloadService {
     }
   }
 
+  static String _setAsidePath(String videoPath) => '$videoPath.old';
+
+  Future<void> _setAsideCopy(String videoPath) async {
+    try {
+      final video = File(videoPath);
+      if (await video.exists()) await video.rename(_setAsidePath(videoPath));
+    } catch (error) {
+      debugPrint('Nie udało się odłożyć starej kopii (${error.runtimeType}).');
+    }
+  }
+
+  /// After a failed or cancelled "Download again", puts the old copy back.
+  Future<void> _restoreSetAsideCopy(String? videoPath) async {
+    if (videoPath == null) return;
+    try {
+      final old = File(_setAsidePath(videoPath));
+      if (await old.exists() && !await File(videoPath).exists()) {
+        await old.rename(videoPath);
+      }
+    } catch (error) {
+      debugPrint('Nie udało się przywrócić kopii (${error.runtimeType}).');
+    }
+  }
+
+  Future<void> _dropSetAsideCopy(String videoPath) async {
+    try {
+      final old = File(_setAsidePath(videoPath));
+      if (await old.exists()) await old.delete();
+    } catch (_) {}
+  }
+
+  final Map<String, DateTime> _lastProgressEmit = {};
+
   void _updateProgress(
     String id, {
     double progressValue = 0.0,
@@ -1094,7 +1319,22 @@ class DownloadService {
         : (progressValue > 1 ? progressValue / 100 : progressValue)
               .clamp(0.0, 1.0)
               .toDouble();
-    var newMap = Map<String, DownloadStatus>.from(activeDownloads.value);
+    final previous = activeDownloads.value[id];
+    final now = DateTime.now();
+    // Every listener rebuilds on each update. Several transfers reporting
+    // every few kilobytes used to flood the UI, so small steps are merged.
+    if (previous != null &&
+        !previous.isDownloaded &&
+        previous.isQueued == isQueued &&
+        previous.progressValue > 0 &&
+        normalizedProgress >= previous.progressValue &&
+        normalizedProgress - previous.progressValue < 0.01 &&
+        now.difference(_lastProgressEmit[id] ?? DateTime(0)) <
+            const Duration(milliseconds: 500)) {
+      return;
+    }
+    _lastProgressEmit[id] = now;
+    final newMap = Map<String, DownloadStatus>.from(activeDownloads.value);
     newMap[id] = DownloadStatus(
       progressValue: normalizedProgress,
       progressText: progressText,
@@ -1104,6 +1344,8 @@ class DownloadService {
   }
 
   void _finishDownload(String id, String fullPath) {
+    _lastProgressEmit.remove(id);
+    unawaited(_dropSetAsideCopy(fullPath));
     var newMap = Map<String, DownloadStatus>.from(activeDownloads.value);
     newMap[id] = DownloadStatus(isDownloaded: true, filePath: fullPath);
     activeDownloads.value = newMap;
@@ -1127,44 +1369,24 @@ class DownloadService {
         receiveTimeout: const Duration(minutes: 2),
       ),
     );
-    String coverUrl =
+    final coverUrl =
         "$baseUrl/Items/${item.seriesId ?? item.id}/Images/Primary?fillWidth=400&quality=90";
+    await _downloadImageOnce(
+      dio,
+      coverUrl,
+      '${seriesDir.path}/folder.jpg',
+      token,
+    );
 
-    File coverFile = File('${seriesDir.path}/folder.jpg');
-    if (!coverFile.existsSync()) {
-      try {
-        await dio.download(
-          coverUrl,
-          coverFile.path,
-          options: Options(headers: jellyfinAuthHeaders(token)),
-        );
-        if (coverFile.existsSync() && coverFile.lengthSync() < 500) {
-          coverFile.deleteSync();
-        }
-      } catch (_) {
-        if (coverFile.existsSync()) coverFile.deleteSync();
-      }
-    }
-
-    String thumbUrl =
+    final thumbUrl =
         "$baseUrl/Items/${item.id}/Images/Primary?fillWidth=400&quality=90";
-    String thumbFileName = fileName.replaceAll('.mp4', '.jpg');
-    File thumbFile = File('${seriesDir.path}/$thumbFileName');
-
-    if (!thumbFile.existsSync()) {
-      try {
-        await dio.download(
-          thumbUrl,
-          thumbFile.path,
-          options: Options(headers: jellyfinAuthHeaders(token)),
-        );
-        if (thumbFile.existsSync() && thumbFile.lengthSync() < 500) {
-          thumbFile.deleteSync();
-        }
-      } catch (_) {
-        if (thumbFile.existsSync()) thumbFile.deleteSync();
-      }
-    }
+    final thumbFileName = fileName.replaceAll('.mp4', '.jpg');
+    await _downloadImageOnce(
+      dio,
+      thumbUrl,
+      '${seriesDir.path}/$thumbFileName',
+      token,
+    );
   }
 
   Future<void> _downloadJsonMetadata({
@@ -1210,19 +1432,30 @@ class DownloadService {
       videoFileName: fileName,
     );
     itemMetadata['DownloadedSubtitles'] = downloadedSubtitles;
-    await File(
+    // Intro/credits segments (Intro Skipper), so skipping works offline.
+    final segments = await JellyfinApi().fetchMediaSegments(
+      baseUrl: baseUrl,
+      token: token,
+      itemId: itemId,
+    );
+    if (segments.isNotEmpty) itemMetadata['MediaSegments'] = segments;
+    await _writeStringAtomic(
       '${seriesDir.path}/$fileName.json',
-    ).writeAsString(const JsonEncoder.withIndent('  ').convert(itemMetadata));
+      const JsonEncoder.withIndent('  ').convert(itemMetadata),
+    );
     if (seriesId != null && seriesId.isNotEmpty) {
       final seriesMetadata = await fetchItem(seriesId);
       if (seriesMetadata == null) {
         throw StateError('Nie udało się pobrać metadanych serialu.');
       }
-      await File('${seriesDir.path}/series.json').writeAsString(
+      await _writeStringAtomic(
+        '${seriesDir.path}/series.json',
         const JsonEncoder.withIndent('  ').convert(seriesMetadata),
       );
     }
   }
+
+  static const subtitleWaitTimeout = Duration(minutes: 10);
 
   Future<List<Map<String, dynamic>>> _downloadAllSubtitles({
     required String itemId,
@@ -1263,6 +1496,12 @@ class DownloadService {
       'tx3g',
     };
 
+    // One read of the downloader database for the checks below; the wait
+    // loop re-reads it because it waits for a state change.
+    final initialJobs = Platform.isAndroid
+        ? await FlutterDownloader.loadTasks() ?? <DownloadTask>[]
+        : null;
+
     for (final stream in streams) {
       final index = stream['Index'];
       if (index is! num) continue;
@@ -1294,11 +1533,8 @@ class DownloadService {
         usedPaths.add(subtitleName.toLowerCase());
       }
       final file = File('${subtitleDir.path}/$subtitleName');
-      final subtitleJobs = Platform.isAndroid
-          ? await FlutterDownloader.loadTasks() ?? []
-          : null;
       final previousJobs =
-          subtitleJobs
+          initialJobs
               ?.where(
                 (job) =>
                     job.savedDir == subtitleDir.path &&
@@ -1325,8 +1561,7 @@ class DownloadService {
           '$baseUrl/Videos/$itemId/$itemId/Subtitles/${index.toInt()}/0/Stream.$extension',
         );
         if (Platform.isAndroid) {
-          final tasks = await FlutterDownloader.loadTasks() ?? [];
-          final activeTask = tasks.where((task) {
+          final activeTask = initialJobs!.where((task) {
             final active =
                 task.status == DownloadTaskStatus.enqueued ||
                 task.status == DownloadTaskStatus.running ||
@@ -1358,7 +1593,15 @@ class DownloadService {
               );
             }
           }
+          // A Wi-Fi-only task stays "enqueued" on mobile data for as long as
+          // it takes; give up after a while and let the backoff retry later.
+          final waitUntil = DateTime.now().add(subtitleWaitTimeout);
           while (true) {
+            if (DateTime.now().isAfter(waitUntil)) {
+              throw TimeoutException(
+                'Przekroczono czas oczekiwania na napisy.',
+              );
+            }
             final jobs = await FlutterDownloader.loadTasks() ?? [];
             final matching =
                 jobs

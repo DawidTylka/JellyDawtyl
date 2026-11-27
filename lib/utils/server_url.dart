@@ -14,3 +14,48 @@ String normalizeServerUrl(String input) {
   }
   return value.replaceFirst(RegExp(r'/+$'), '');
 }
+
+/// Whether [address] uses plain `http://` to a host outside the local
+/// network, so the password and the access token would cross the internet
+/// unencrypted. Addresses without a scheme become `https://` and are safe.
+bool isInsecurePublicAddress(String address) {
+  final value = address.trim();
+  if (!RegExp(r'^http://', caseSensitive: false).hasMatch(value)) {
+    return false;
+  }
+  final host = Uri.tryParse(value)?.host.toLowerCase() ?? '';
+  if (host.isEmpty) return false;
+  return !isLocalNetworkHost(host);
+}
+
+/// Loopback, private IPv4/IPv6 ranges, link-local, `.local`/`.lan` names and
+/// single-label host names (resolved by the local DNS).
+bool isLocalNetworkHost(String host) {
+  final h = host.toLowerCase().replaceAll(RegExp(r'^\[|\]$'), '');
+  if (h == 'localhost' ||
+      h.endsWith('.local') ||
+      h.endsWith('.lan') ||
+      h.endsWith('.home.arpa') ||
+      h.endsWith('.internal')) {
+    return true;
+  }
+  final ipv4 = RegExp(r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$');
+  final m = ipv4.firstMatch(h);
+  if (m != null) {
+    final a = int.parse(m.group(1)!);
+    final b = int.parse(m.group(2)!);
+    return a == 10 ||
+        a == 127 ||
+        (a == 172 && b >= 16 && b <= 31) ||
+        (a == 192 && b == 168) ||
+        (a == 169 && b == 254) ||
+        (a == 100 && b >= 64 && b <= 127); // CGNAT, e.g. Tailscale
+  }
+  if (h.contains(':')) {
+    return h == '::1' ||
+        h.startsWith('fc') ||
+        h.startsWith('fd') ||
+        h.startsWith('fe80');
+  }
+  return !h.contains('.');
+}

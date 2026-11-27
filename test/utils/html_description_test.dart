@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_application_1/utils/html_description.dart';
+import 'package:jellydawtyl/utils/html_description.dart';
 
 void main() {
   group('cleanHtmlDescription', () {

@@ -139,7 +139,13 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
             try { Thread.sleep(500) } catch (_: InterruptedException) { return Result.retry() }
         }
         if (isStopped) { DownloadSlots.release(); return Result.retry() }
-        return try { performWork() } finally { DownloadSlots.release() }
+        return try {
+            val wait = DownloadSlots.millisUntilForegroundAllowed()
+            if (wait > 0) {
+                try { Thread.sleep(wait) } catch (_: InterruptedException) { return Result.retry() }
+            }
+            if (isStopped) Result.retry() else performWork()
+        } finally { DownloadSlots.release() }
     }
 
     private fun performWork(): Result {

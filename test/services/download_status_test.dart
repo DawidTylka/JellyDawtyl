@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:flutter_application_1/services/download_service.dart';
+import 'package:jellydawtyl/services/download_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -14,6 +14,7 @@ void main() {
       'setting_download_path': directory.path,
     });
     await Directory('${directory.path}/JellyDawtyl').create();
+    service.invalidateDirectoryPathCache();
     service.activeDownloads.value = {};
   });
   tearDown(() async {

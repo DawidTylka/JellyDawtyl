@@ -63,6 +63,22 @@ class PlaybackSyncService {
         'Nie udało się odczytać kolejki synchronizacji odtwarzania: $error',
       );
     }
+    // Changes queued by older versions have no owner. They were recorded
+    // by the account logged in now (logout did not clear the queue), so
+    // they are assigned to it once.
+    if (_pending.values.any((change) => change['userId'] == null)) {
+      try {
+        final userId = (await _storage.getCredentials())?['userId'];
+        if (userId != null) {
+          for (final change in _pending.values) {
+            change['userId'] ??= userId;
+          }
+          await _save();
+        }
+      } catch (_) {
+        // Retried at the next start.
+      }
+    }
 
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
       states,
@@ -143,8 +159,13 @@ class PlaybackSyncService {
       debugPrint('Nie udało się zapisać lokalnego postępu: $error');
     }
 
+    String? userId;
+    try {
+      userId = (await _storage.getCredentials())?['userId'];
+    } catch (_) {}
     _pending[itemId] = {
       'itemId': itemId,
+      'userId': ?userId,
       'positionMs': positionMs,
       'durationMs': durationMs,
       'played': played,
@@ -299,10 +320,12 @@ class PlaybackSyncService {
     _isSyncing = true;
     try {
       final credentials = await _storage.getCredentials();
-      if (credentials == null) return;
+      if (credentials == null || credentials['token'] == null) return;
       final api = JellyfinApi();
       await flushPendingPlaybackChanges(
         pending: _pending,
+        // Only this account's changes; another user's wait for them.
+        include: (change) => belongsToUser(change, credentials['userId']),
         synchronize: (change) async {
           final position = Duration(
             milliseconds: change['positionMs'] as int? ?? 0,
@@ -360,10 +383,7 @@ class PlaybackSyncService {
       final socketUri = baseUri.replace(
         scheme: scheme,
         path: '$basePath/socket',
-        queryParameters: {
-          ...baseUri.queryParameters,
-          'deviceId': deviceId,
-        },
+        queryParameters: {...baseUri.queryParameters, 'deviceId': deviceId},
       );
       final socket = await WebSocket.connect(
         socketUri.toString(),

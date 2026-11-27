@@ -18,9 +18,21 @@ This project was created mainly for my **personal use** to address specific stor
 
 * **Premium Player:** Built on the `MediaKit` engine, supporting on-the-fly quality changes, external subtitles (.srt), and automatic next-episode playback.
 * **Offline Mode:** Download movies and series to your device. Choose specific video quality and download entire seasons with one click.
-* **Smart Downloading:** Toggle between a native download manager and the Dio engine, with an option to restrict downloads to Wi-Fi only.
-* **Desktop Ready:** Full mouse and trackpad support (including horizontal scrolling with the mouse wheel) for Windows and macOS.
+* **Smart Downloading:** Background downloads through Android's system downloader (optionally with a notification) and the Dio engine on desktop, cancelling, resuming original-quality downloads, and an option to restrict downloads to Wi-Fi only.
+* **Skip Intro:** "Skip intro", "Skip credits" and "Skip recap" buttons (or automatic skipping) using segments from the [Intro Skipper](https://github.com/intro-skipper/intro-skipper) plugin or Jellyfin 10.10+ media segments, online and offline.
+* **Desktop Ready:** Full mouse and trackpad support (including horizontal scrolling with the mouse wheel) for Windows, Linux and macOS.
 * **Progress Sync:** Automatically reports playback progress back to the Jellyfin server.
+
+### 🔧 Building
+
+```bash
+cp .env.example .env          # optional: your AdMob IDs
+flutter pub get
+flutter run --dart-define-from-file=.env
+flutter test
+```
+
+`.env` is read by Gradle and passed to Dart with `--dart-define-from-file`; it is not bundled into the app. Without it, Google's public test ad IDs are used.
 
 ### 🛠️ Tech Stack
 
@@ -50,9 +62,21 @@ Projekt powstał przede wszystkim na mój **własny, osobisty użytek**, aby roz
 
 * **Odtwarzacz Premium:** Zbudowany na silniku `MediaKit`, obsługuje zmianę jakości "w locie", napisy zewnętrzne (.srt) i autoodtwarzanie kolejnych odcinków.
 * **Tryb Offline:** Pobieranie filmów i seriali do pamięci urządzenia. Możliwość wyboru jakości wideo i pobierania całych sezonów jednym kliknięciem.
-* **Inteligentne Pobieranie:** Wybór między natywnym menedżerem pobierania a silnikiem Dio, z opcją blokady pobierania przez dane komórkowe.
-* **Desktop Ready:** Pełna obsługa myszy i gładzików (scrollowanie poziome rolką) na systemach Windows i macOS.
+* **Inteligentne Pobieranie:** Pobieranie w tle przez systemowy menedżer Androida (opcjonalnie z powiadomieniem) i silnik Dio na komputerach, anulowanie, wznawianie pobierania oryginalnej jakości oraz opcja blokady pobierania przez dane komórkowe.
+* **Pomijanie intro:** Przyciski „Pomiń intro”, „Pomiń napisy końcowe” i „Pomiń podsumowanie” (lub automatyczne pomijanie) na podstawie segmentów z wtyczki [Intro Skipper](https://github.com/intro-skipper/intro-skipper) albo segmentów Jellyfin 10.10+, także offline.
+* **Desktop Ready:** Pełna obsługa myszy i gładzików (scrollowanie poziome rolką) na systemach Windows, Linux i macOS.
 * **Synchronizacja Postępu:** Automatyczne raportowanie czasu oglądania do serwera Jellyfin.
+
+### 🔧 Budowanie
+
+```bash
+cp .env.example .env          # opcjonalnie: własne identyfikatory AdMob
+flutter pub get
+flutter run --dart-define-from-file=.env
+flutter test
+```
+
+`.env` czyta Gradle, a do kodu Darta trafia przez `--dart-define-from-file`; nie jest dołączany do aplikacji. Bez niego używane są publiczne testowe identyfikatory reklam Google.
 
 ### 🛠️ Technologie
 

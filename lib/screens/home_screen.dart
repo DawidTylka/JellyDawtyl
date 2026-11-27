@@ -3,6 +3,8 @@ import '../models/movie.dart';
 import '../widgets/ad_banner_widget.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/jellyfin_section.dart';
+import '../services/jellyfin_api.dart';
+import 'search_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final List<Movie> resumeMovies;
@@ -11,6 +13,8 @@ class HomeScreen extends StatelessWidget {
   final String baseUrl;
   final String token;
   final String userId;
+  final String? libraryId;
+  final String? libraryName;
 
   const HomeScreen({
     super.key,
@@ -20,11 +24,13 @@ class HomeScreen extends StatelessWidget {
     required this.baseUrl,
     required this.token,
     required this.userId,
+    this.libraryId,
+    this.libraryName,
   });
 
   @override
   Widget build(BuildContext context) {
-    final cleanUrl = baseUrl.startsWith('http') ? baseUrl : 'https://$baseUrl';
+    final cleanUrl = baseUrl;
     final l10n = AppLocalizations.of(context)!;
 
     return LayoutBuilder(
@@ -33,7 +39,28 @@ class HomeScreen extends StatelessWidget {
         final contentMaxWidth = screenWidth >= 1500 ? 1400.0 : double.infinity;
 
         return Scaffold(
-          appBar: AppBar(title: const Text("Jellyfin")),
+          appBar: AppBar(
+            title: Text(libraryName ?? "JellyDawtyl"),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.search),
+                tooltip: l10n.search,
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SearchScreen(
+                      baseUrl: cleanUrl,
+                      token: token,
+                      userId: userId,
+                      libraryId: libraryId,
+                      libraryName: libraryName,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+          ),
           body: Scrollbar(
             thumbVisibility: screenWidth >= 1000,
             child: ListView(
@@ -69,6 +96,17 @@ class HomeScreen extends StatelessWidget {
                           baseUrl: cleanUrl,
                           token: token,
                           userId: userId,
+                          pageLoader: libraryId == null
+                              ? null
+                              : (startIndex, searchTerm) =>
+                                    JellyfinApi().fetchAllInLibrary(
+                                      cleanUrl,
+                                      token,
+                                      userId,
+                                      libraryId!,
+                                      startIndex: startIndex,
+                                      searchTerm: searchTerm,
+                                    ),
                         ),
                       ],
                     ),
